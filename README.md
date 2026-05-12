@@ -80,7 +80,7 @@
 
 | Ноутбук | Модуль курса | Что вы делаете |
 | --- | --- | --- |
-| [`notebooks/kaggle-5day-genai/day-1-prompting.ipynb`](notebooks/kaggle-5day-genai/day-1-prompting.ipynb) | [Модуль 2.5 — Рабочие площадки](https://itrubnikov.github.io/Train_of_Thought/docs/modules/02-5-resources/) | Первое касание Gemini API, базовые параметры (temperature, top-p), zero/few-shot, CoT, ReAct. |
+| [`notebooks/kaggle-5day-genai/day-1-prompting.ipynb`](notebooks/kaggle-5day-genai/day-1-prompting.ipynb) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Первое касание Gemini API, базовые параметры (temperature, top-p), zero/few-shot, CoT, ReAct. |
 | [`notebooks/kaggle-5day-genai/day-2-embeddings.ipynb`](notebooks/kaggle-5day-genai/day-2-embeddings.ipynb) | [Модуль 7 — RAG](https://itrubnikov.github.io/Train_of_Thought/docs/modules/07-rag/) | Эмбеддинги через `text-embedding-004`, cosine similarity, тепловая карта похожести. Это основание для всего RAG. |
 | [`notebooks/kaggle-5day-genai/day-3-function-calling.ipynb`](notebooks/kaggle-5day-genai/day-3-function-calling.ipynb) | [Модуль 8 — Что такое агент](https://itrubnikov.github.io/Train_of_Thought/docs/modules/08-what-is-agent/) | Первый «настоящий» агент: Gemini + 3 функции над SQLite + автоматический tool-calling loop. |
 
