@@ -88,10 +88,17 @@
 | [`notebooks/module-1-5-modern-tools/`](notebooks/module-1-5-modern-tools/) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | `presenter-demo` для лекции, два тура (Kaggle / HF), три отдельные практики (по одной на площадку), плюс опциональный Day 1 prompting. |
 | [`notebooks/module-7-rag/`](notebooks/module-7-rag/) | [Модуль 7 — RAG, который работает](https://itrubnikov.github.io/Train_of_Thought/docs/modules/07-rag/) | Day 2 — эмбеддинги + cosine similarity heatmap. Геометрическая интуиция под весь RAG. |
 | [`notebooks/module-8-what-is-agent/`](notebooks/module-8-what-is-agent/) | [Модуль 8 — Что такое агент](https://itrubnikov.github.io/Train_of_Thought/docs/modules/08-what-is-agent/) | Day 3 — первый агент с function calling над SQLite. |
+| [`notebooks/module-10-smolagents/`](notebooks/module-10-smolagents/) | [Модуль 10 — smolagents](https://itrubnikov.github.io/Train_of_Thought/docs/modules/10-smolagents/) | HF Agents Course Unit 2.1 — tool-ы в smolagents (`@tool`, subclass, default toolbox, Hub-шеринг, Spaces, MCP). |
 
 Адаптированные `day-*.ipynb` — это форки материалов [Kaggle 5-Day GenAI
 Intensive](https://www.kaggle.com/learn-guide/5-day-genai) от Google
-под Apache 2.0 (см. шапки ноутбуков). Всё остальное — наше под MIT.
+под Apache 2.0 (см. шапки ноутбуков). Ноутбуки из `module-10-smolagents/` —
+форки [HF Agents Course](https://huggingface.co/learn/agents-course)
+под Apache 2.0. Всё остальное — наше под MIT.
+
+**Параллельный учебный канон:** мы проходим [HF Agents Course Unit 2](https://huggingface.co/learn/agents-course/unit2)
+(smolagents + LlamaIndex + LangGraph) параллельно нашим модулям 10, 14, 15.
+Под каждый Unit 2.* появится своя папка с заготовками.
 
 Презентерские ноутбуки модуля 1.5 генерируются из
 [`notebooks/module-1-5-modern-tools/_build.py`](notebooks/module-1-5-modern-tools/_build.py);
