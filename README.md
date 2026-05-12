@@ -82,10 +82,23 @@
 
 ### Наши playbook'и (живая практика на занятии)
 
+Делятся на две категории — **туры** (демонстрирует лектор) и
+**практики** (заполняет ученик).
+
+#### Туры — демонстрационные ноутбуки
+
 | Ноутбук | Модуль курса | Когда использовать |
 | --- | --- | --- |
-| [`notebooks/playbooks/kaggle-tour.ipynb`](notebooks/playbooks/kaggle-tour.ipynb) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Пошаговая демонстрация Kaggle: phone verify, GPU, Secrets, первый запрос к Gemini. ~25 мин. |
-| [`notebooks/playbooks/huggingface-tour.ipynb`](notebooks/playbooks/huggingface-tour.ipynb) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Пошаговая демонстрация HF: Hub, model card, `pipeline`, `load_dataset`, Spaces. ~20 мин. |
+| [`notebooks/playbooks/kaggle-tour.ipynb`](notebooks/playbooks/kaggle-tour.ipynb) | [Модуль 1.5](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Пошаговая демонстрация Kaggle: phone verify, GPU, Secrets, первый запрос к Gemini. ~25 мин. |
+| [`notebooks/playbooks/huggingface-tour.ipynb`](notebooks/playbooks/huggingface-tour.ipynb) | [Модуль 1.5](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Пошаговая демонстрация HF: Hub, model card, `pipeline`, `load_dataset`, Spaces. ~20 мин. |
+
+#### Практики — одна задача на площадку
+
+| Ноутбук | Площадка | Что делаете |
+| --- | --- | --- |
+| [`notebooks/playbooks/practice-kaggle.ipynb`](notebooks/playbooks/practice-kaggle.ipynb) | Kaggle | Подключаете публичный датасет, гоняете pandas, считаете метрику, строите график. ~10 мин. |
+| [`notebooks/playbooks/practice-huggingface.ipynb`](notebooks/playbooks/practice-huggingface.ipynb) | Hugging Face | `pipeline("sentiment-analysis")` × `load_dataset("imdb")`, accuracy на 50 примерах, разбор ошибок. ~10 мин. |
+| [`notebooks/playbooks/practice-aistudio.ipynb`](notebooks/playbooks/practice-aistudio.ipynb) | Google AI Studio | Sentiment через Gemini API, structured output (enum mode), эксперимент с температурой. ~10 мин. |
 
 Эти ноутбуки — наши собственные, под MIT. Сгенерированы из
 `notebooks/playbooks/_build.py`; чтобы поправить контент — правьте `.py`,
