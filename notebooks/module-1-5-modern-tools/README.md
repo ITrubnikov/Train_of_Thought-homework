@@ -40,6 +40,7 @@
 | [`practice-kaggle.ipynb`](practice-kaggle.ipynb) | Подключает публичный датасет, гоняет pandas, считает метрику, строит график | ~10 мин |
 | [`practice-huggingface.ipynb`](practice-huggingface.ipynb) | `pipeline("sentiment-analysis")` × `load_dataset("imdb")`, accuracy на 50 примерах, разбор ошибок | ~10 мин |
 | [`practice-aistudio.ipynb`](practice-aistudio.ipynb) | Sentiment через Gemini API, structured output (enum), эксперимент с температурой | ~10 мин |
+| [`spaces-practice.md`](spaces-practice.md) | Web-workflow (не ноутбук): дублируете готовый Space `agents-course/First_agent_template`, добавляете свой tool, получаете публичный URL агента | ~15—20 мин |
 
 ### Опциональный deep-dive
 
