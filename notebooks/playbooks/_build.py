@@ -414,7 +414,10 @@ int4-квантизованную версию.
 
     code("""from transformers import pipeline
 
-clf = pipeline("sentiment-analysis")  # дефолт: distilbert SST-2, ~250 МБ
+# device=-1 — принудительно CPU. На Kaggle бывает старый GPU (Tesla
+# P100), который несовместим со свежим PyTorch. Для крошечной distilbert
+# CPU быстрее по запуску и надёжнее.
+clf = pipeline("sentiment-analysis", device=-1)  # дефолт: distilbert SST-2, ~250 МБ
 print(clf("This course is unexpectedly fun."))
 print(clf("Honestly, I'm just here for the certificate."))
 print(clf("I had high hopes but the second module was a slog."))
@@ -759,7 +762,10 @@ except Exception:
 
     code("""from transformers import pipeline
 
-clf = pipeline("sentiment-analysis")
+# device=-1 — CPU (distilbert крошечная, GPU не нужен).
+# На Kaggle иногда дают Tesla P100, она несовместима со свежим
+# PyTorch — поэтому явный CPU надёжнее.
+clf = pipeline("sentiment-analysis", device=-1)
 
 # Sanity check
 print(clf("This course is unexpectedly fun."))
@@ -1077,7 +1083,10 @@ print("Места под выход (/kaggle/working):",
 
     code("""from transformers import pipeline
 
-clf = pipeline("sentiment-analysis")
+# device=-1 — CPU. Маленькие модели типа distilbert на CPU работают
+# быстро, плюс это страхует от старых GPU на Kaggle (P100 имеет CUDA
+# capability sm_60, несовместима со свежим PyTorch).
+clf = pipeline("sentiment-analysis", device=-1)
 print(clf("This course is unexpectedly fun."))
 print(clf("Honestly, I'm just here for the certificate."))
 print(clf("It was not bad, actually."))  # фраза с подвохом
@@ -1090,7 +1099,11 @@ print(clf("It was not bad, actually."))  # фраза с подвохом
     code("""from sentence_transformers import SentenceTransformer
 import numpy as np
 
-emb_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+# Тоже CPU — модель крошечная (~80 МБ), вычисление за миллисекунды.
+emb_model = SentenceTransformer(
+    "sentence-transformers/all-MiniLM-L6-v2",
+    device="cpu",
+)
 
 phrases = [
     "The quick brown fox jumps over the lazy dog.",
