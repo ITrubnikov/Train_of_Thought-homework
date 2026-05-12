@@ -76,46 +76,27 @@
 
 ---
 
-## Карта ноутбуков → модулей
+## Структура — одна папка на модуль курса
 
-Ноутбуки разделены на две группы.
+Каждый модуль курса, где есть практическая часть в Kaggle, лежит в
+своей папке `notebooks/module-<N>-<slug>/`. Внутри — все ноутбуки,
+которые нужны к этому модулю, плюс отдельный `README.md` с
+объяснением «зачем эта папка, что внутри, что от вас требуется».
 
-### Наши playbook'и (живая практика на занятии)
-
-Делятся на две категории — **туры** (демонстрирует лектор) и
-**практики** (заполняет ученик).
-
-#### Туры — демонстрационные ноутбуки
-
-| Ноутбук | Модуль курса | Когда использовать |
+| Папка | Модуль курса | Что внутри |
 | --- | --- | --- |
-| [`notebooks/playbooks/kaggle-tour.ipynb`](notebooks/playbooks/kaggle-tour.ipynb) | [Модуль 1.5](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Пошаговая демонстрация Kaggle: phone verify, GPU, Secrets, первый запрос к Gemini. ~25 мин. |
-| [`notebooks/playbooks/huggingface-tour.ipynb`](notebooks/playbooks/huggingface-tour.ipynb) | [Модуль 1.5](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Пошаговая демонстрация HF: Hub, model card, `pipeline`, `load_dataset`, Spaces. ~20 мин. |
+| [`notebooks/module-1-5-modern-tools/`](notebooks/module-1-5-modern-tools/) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | `presenter-demo` для лекции, два тура (Kaggle / HF), три отдельные практики (по одной на площадку), плюс опциональный Day 1 prompting. |
+| [`notebooks/module-7-rag/`](notebooks/module-7-rag/) | [Модуль 7 — RAG, который работает](https://itrubnikov.github.io/Train_of_Thought/docs/modules/07-rag/) | Day 2 — эмбеддинги + cosine similarity heatmap. Геометрическая интуиция под весь RAG. |
+| [`notebooks/module-8-what-is-agent/`](notebooks/module-8-what-is-agent/) | [Модуль 8 — Что такое агент](https://itrubnikov.github.io/Train_of_Thought/docs/modules/08-what-is-agent/) | Day 3 — первый агент с function calling над SQLite. |
 
-#### Практики — одна задача на площадку
+Адаптированные `day-*.ipynb` — это форки материалов [Kaggle 5-Day GenAI
+Intensive](https://www.kaggle.com/learn-guide/5-day-genai) от Google
+под Apache 2.0 (см. шапки ноутбуков). Всё остальное — наше под MIT.
 
-| Ноутбук | Площадка | Что делаете |
-| --- | --- | --- |
-| [`notebooks/playbooks/practice-kaggle.ipynb`](notebooks/playbooks/practice-kaggle.ipynb) | Kaggle | Подключаете публичный датасет, гоняете pandas, считаете метрику, строите график. ~10 мин. |
-| [`notebooks/playbooks/practice-huggingface.ipynb`](notebooks/playbooks/practice-huggingface.ipynb) | Hugging Face | `pipeline("sentiment-analysis")` × `load_dataset("imdb")`, accuracy на 50 примерах, разбор ошибок. ~10 мин. |
-| [`notebooks/playbooks/practice-aistudio.ipynb`](notebooks/playbooks/practice-aistudio.ipynb) | Google AI Studio | Sentiment через Gemini API, structured output (enum mode), эксперимент с температурой. ~10 мин. |
-
-Эти ноутбуки — наши собственные, под MIT. Сгенерированы из
-`notebooks/playbooks/_build.py`; чтобы поправить контент — правьте `.py`,
-запускайте `python3 _build.py`, коммитьте оба файла вместе.
-
-### Адаптации Kaggle 5-Day GenAI Intensive
-
-| Ноутбук | Модуль курса | Что вы делаете |
-| --- | --- | --- |
-| [`notebooks/kaggle-5day-genai/day-1-prompting.ipynb`](notebooks/kaggle-5day-genai/day-1-prompting.ipynb) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Первое касание Gemini API, базовые параметры (temperature, top-p), zero/few-shot, CoT, ReAct. |
-| [`notebooks/kaggle-5day-genai/day-2-embeddings.ipynb`](notebooks/kaggle-5day-genai/day-2-embeddings.ipynb) | [Модуль 7 — RAG](https://itrubnikov.github.io/Train_of_Thought/docs/modules/07-rag/) | Эмбеддинги через `text-embedding-004`, cosine similarity, тепловая карта похожести. Это основание для всего RAG. |
-| [`notebooks/kaggle-5day-genai/day-3-function-calling.ipynb`](notebooks/kaggle-5day-genai/day-3-function-calling.ipynb) | [Модуль 8 — Что такое агент](https://itrubnikov.github.io/Train_of_Thought/docs/modules/08-what-is-agent/) | Первый «настоящий» агент: Gemini + 3 функции над SQLite + автоматический tool-calling loop. |
-
-Эти три ноутбука — модифицированные копии материалов
-[Kaggle 5-Day GenAI Intensive](https://www.kaggle.com/learn-guide/5-day-genai)
-от Google, под Apache 2.0 (см. шапки самих ноутбуков). Все правки и
-довески — наши.
+Презентерские ноутбуки модуля 1.5 генерируются из
+[`notebooks/module-1-5-modern-tools/_build.py`](notebooks/module-1-5-modern-tools/_build.py);
+правьте Python-код, запускайте `python3 _build.py`, коммитьте `.py`
+вместе с `.ipynb`.
 
 ---
 
