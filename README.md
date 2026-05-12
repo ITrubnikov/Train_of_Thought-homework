@@ -78,6 +78,21 @@
 
 ## Карта ноутбуков → модулей
 
+Ноутбуки разделены на две группы.
+
+### Наши playbook'и (живая практика на занятии)
+
+| Ноутбук | Модуль курса | Когда использовать |
+| --- | --- | --- |
+| [`notebooks/playbooks/kaggle-tour.ipynb`](notebooks/playbooks/kaggle-tour.ipynb) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Пошаговая демонстрация Kaggle: phone verify, GPU, Secrets, первый запрос к Gemini. ~25 мин. |
+| [`notebooks/playbooks/huggingface-tour.ipynb`](notebooks/playbooks/huggingface-tour.ipynb) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Пошаговая демонстрация HF: Hub, model card, `pipeline`, `load_dataset`, Spaces. ~20 мин. |
+
+Эти ноутбуки — наши собственные, под MIT. Сгенерированы из
+`notebooks/playbooks/_build.py`; чтобы поправить контент — правьте `.py`,
+запускайте `python3 _build.py`, коммитьте оба файла вместе.
+
+### Адаптации Kaggle 5-Day GenAI Intensive
+
 | Ноутбук | Модуль курса | Что вы делаете |
 | --- | --- | --- |
 | [`notebooks/kaggle-5day-genai/day-1-prompting.ipynb`](notebooks/kaggle-5day-genai/day-1-prompting.ipynb) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | Первое касание Gemini API, базовые параметры (temperature, top-p), zero/few-shot, CoT, ReAct. |
