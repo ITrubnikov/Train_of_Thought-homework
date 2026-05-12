@@ -1027,3 +1027,205 @@ for _ in range(5):
 ]
 
 write("practice-aistudio", practice_ai)
+
+
+# -----------------------------------------------------------------------
+# PRESENTER DEMO — плотная витрина под скринкаст ~5—7 мин
+# -----------------------------------------------------------------------
+
+demo = [
+    md("""# Presenter Demo: три площадки за 5 минут
+
+> **Курс «От нуля до своих агентов» — Модуль 1.5.**
+> Это **демонстрационный** ноутбук для скринкаста. Все ячейки рабочие,
+> никаких TODO. Цель — за 5—7 минут показать студентам, как ощущается
+> каждая из трёх площадок изнутри.
+>
+> Что внутри:
+> - **Kaggle** — окружение, GPU, файловая система.
+> - **Hugging Face** — `pipeline` на sentiment + embeddings + similarity.
+> - **Google AI Studio** — Gemini с structured output + vision (картинка → JSON).
+> - **Бонус** — function calling одним вызовом (тизер к Модулю 8).
+>
+> **Перед запуском:** убедитесь, что в Kaggle Secrets прикреплён
+> `GOOGLE_API_KEY`. `HF_TOKEN` для этого демо не обязателен.
+"""),
+
+    md("""## 1. Kaggle — наша рабочая среда"""),
+
+    code("""import sys, platform, os
+
+print("Python:", sys.version.split()[0])
+print("Platform:", platform.platform())
+print("Рабочая папка:", os.getcwd())
+print("Места под выход (/kaggle/working):",
+      f"{os.statvfs('/kaggle/working').f_bavail * 512 // (1024**3)} ГБ свободно")
+"""),
+
+    code("""# GPU есть? (если Accelerator = None, выведется пусто)
+!nvidia-smi -L 2>/dev/null || echo "GPU не подключён — переключите Accelerator в правой панели"
+"""),
+
+    md("""## 2. Hugging Face — готовые модели в 3 строки
+
+**Sentiment classifier** — крошечная distilbert (~250 МБ), скачается
+в кэш при первом запуске. Дальше — миллисекунды на запрос.
+"""),
+
+    code("""!pip install -q transformers
+"""),
+
+    code("""from transformers import pipeline
+
+clf = pipeline("sentiment-analysis")
+print(clf("This course is unexpectedly fun."))
+print(clf("Honestly, I'm just here for the certificate."))
+print(clf("It was not bad, actually."))  # фраза с подвохом
+"""),
+
+    md("""**Embeddings + similarity** — превращаем текст в вектор и
+считаем «насколько похожи две фразы».
+"""),
+
+    code("""from sentence_transformers import SentenceTransformer
+import numpy as np
+
+emb_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+
+phrases = [
+    "The quick brown fox jumps over the lazy dog.",
+    "A fast fox leaps over a sleepy hound.",         # перефраз
+    "I love pizza with pineapple.",                   # про другое
+    "Шустрый лис прыгает через ленивую собаку.",     # русский перевод
+]
+
+vectors = emb_model.encode(phrases, normalize_embeddings=True)
+similarity = vectors @ vectors.T  # cosine, т.к. вектора нормированы
+
+import pandas as pd
+labels = [p[:40] + ("..." if len(p) > 40 else "") for p in phrases]
+pd.DataFrame(similarity.round(2), index=labels, columns=labels)
+"""),
+
+    md("""## 3. Google AI Studio — Gemini c structured output
+
+Просим foundation-модель не текст, а **строго один enum**. Это база
+надёжной интеграции LLM в код: парсинг ответа становится тривиальным.
+"""),
+
+    code("""!pip install -q google-genai
+"""),
+
+    code("""import enum
+from google import genai
+from google.genai import types
+from kaggle_secrets import UserSecretsClient
+
+client = genai.Client(api_key=UserSecretsClient().get_secret("GOOGLE_API_KEY"))
+
+
+class Sentiment(enum.Enum):
+    POSITIVE = "POSITIVE"
+    NEUTRAL = "NEUTRAL"
+    NEGATIVE = "NEGATIVE"
+
+
+cfg = types.GenerateContentConfig(
+    response_mime_type="text/x.enum",
+    response_schema=Sentiment,
+    temperature=0,
+)
+
+for phrase in [
+    "It was not bad, actually.",
+    "Лучше бы я остался дома.",
+    "норм",
+    "Best class I've taken in years!",
+]:
+    resp = client.models.generate_content(
+        model="gemini-2.5-flash",
+        config=cfg,
+        contents=phrase,
+    )
+    print(f"{resp.parsed.value:8s} | {phrase}")
+"""),
+
+    md("""**Vision** — Gemini читает картинку и возвращает JSON по схеме.
+Берём публичную картинку чека из открытого датасета.
+"""),
+
+    code("""import typing_extensions as typing
+import urllib.request
+
+# Public sample receipt (хостится на Hugging Face datasets)
+url = "https://datasets-server.huggingface.co/assets/mychen76/invoices-and-receipts_ocr_v1/--/default/test/0/image/image.jpg"
+img_bytes = urllib.request.urlopen(url).read()
+
+
+class Receipt(typing.TypedDict):
+    vendor: str
+    total_amount: str
+    item_count: int
+
+
+resp = client.models.generate_content(
+    model="gemini-2.5-flash",
+    config=types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=Receipt,
+        temperature=0,
+    ),
+    contents=[
+        types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+        "Extract vendor name, total amount, and number of line items from this receipt.",
+    ],
+)
+print(resp.text)
+"""),
+
+    md("""## 4. Бонус — function calling одной ячейкой (тизер к Модулю 8)
+
+Даём модели обычную Python-функцию, она сама решает, когда её позвать.
+"""),
+
+    code("""import sqlite3
+
+db = sqlite3.connect(":memory:")
+db.executescript('''
+CREATE TABLE products (name TEXT, price REAL);
+INSERT INTO products VALUES ('Laptop', 799.99), ('Keyboard', 129.99), ('Mouse', 29.99);
+''')
+
+
+def list_products() -> list[tuple[str, float]]:
+    \"\"\"Return all products with their prices from the store catalog.\"\"\"
+    print(" -> tool call: list_products()")
+    return db.execute("SELECT name, price FROM products").fetchall()
+
+
+chat = client.chats.create(
+    model="gemini-2.5-flash",
+    config=types.GenerateContentConfig(
+        system_instruction="You are a sales assistant. Use the tool to look up products.",
+        tools=[list_products],
+    ),
+)
+
+print(chat.send_message("Какой у нас самый дешёвый товар и сколько он стоит?").text)
+"""),
+
+    md("""## Что увидели за 5 минут
+
+- **Kaggle** — настроенная среда, файловая система, GPU.
+- **Hugging Face** — sentiment + embeddings из готовых моделей, 3—5 строк
+  кода каждая.
+- **Google AI Studio** — Gemini с гарантированным JSON-ответом и
+  vision-чтением картинки.
+- **Function calling** — модель сама зовёт нашу функцию (база агентов).
+
+Это всё — на одной бесплатной площадке, без локальных установок,
+скринкаст-ready. Дальше на лекции — разбираем каждую часть подробнее.
+"""),
+]
+
+write("presenter-demo", demo)
