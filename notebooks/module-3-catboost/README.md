@@ -16,15 +16,15 @@
 
 | Файл | Зачем |
 | --- | --- |
-| [`notebook.ipynb`](notebook.ipynb) | Скелет с 4 `TODO`. Грузит Telco Customer Churn, обучает бейзлайн логрегрессии, дальше вы дописываете CatBoost / XGBoost / LightGBM / SHAP. Цель — обогнать бейзлайн (AUC ≥ 0.84) и научиться читать SHAP. |
+| [`notebook.ipynb`](notebook.ipynb) | Скелет с 3 `TODO`. Грузит House Prices (Ames Housing), обучает бейзлайн Ridge-регрессии, дальше вы дописываете CatBoost и SHAP. Цель — обогнать бейзлайн (RMSE ≤ 0.135 на log-цене) и научиться читать SHAP. |
 
 ## Что вы делаете в ноутбуке
 
-1. Грузите [Telco Customer Churn](https://www.kaggle.com/datasets/blastchar/telco-customer-churn) (7 043 строки, 16 категориальных фичей).
-2. Обучаете бейзлайн — логистическую регрессию с OneHotEncoder. Получаете AUC ≈ 0.82.
-3. **TODO 1.** Обучаете `CatBoostClassifier` с `cat_features` + `early_stopping_rounds`. Цель — AUC ≥ 0.84 без feature engineering'а.
-4. **TODO 2.** Строите `shap.summary_plot` для CatBoost-модели, сохраняете `shap_summary.png`, отвечаете одной фразой про топ-3 фичи оттока.
-5. **TODO 3.** Для одного клиента с `P(churn) > 0.8` строите `waterfall_plot`, сохраняете `shap_waterfall.png`, описываете одной фразой, что в его профиле триггерит модель.
+1. Грузите [House Prices — Advanced Regression Techniques](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques) (Ames Housing, 1 460 домов, 80 признаков, 43 категориальных) через `sklearn.datasets.fetch_openml` — никакой Kaggle API не нужен.
+2. Обучаете бейзлайн — `Ridge` (линейная регрессия с L2-регуляризацией) с OneHotEncoder и StandardScaler. Получаете RMSE ≈ 0.16—0.18 на log(SalePrice).
+3. **TODO 1.** Обучаете `CatBoostRegressor` с `cat_features` + `early_stopping_rounds`. Цель — RMSE ≤ 0.135 без feature engineering'а.
+4. **TODO 2.** Строите `shap.summary_plot` для CatBoost-модели, сохраняете `shap_summary.png`, отвечаете одной фразой про топ-3 фичи, двигающие цену.
+5. **TODO 3.** Для **самого дорогого** дома в тесте строите `waterfall_plot`, сохраняете `shap_waterfall.png`, описываете одной фразой, какие фичи задрали его цену.
 
 ## Как запустить
 
@@ -49,7 +49,7 @@ pip install jupyter pandas scikit-learn catboost shap matplotlib
 jupyter notebook notebook.ipynb
 ```
 
-GPU не нужен — на CPU всё обучается за 10—30 секунд.
+GPU не нужен — на CPU всё обучается за 20—40 секунд.
 
 ## ДЗ к модулю
 
@@ -58,23 +58,25 @@ GPU не нужен — на CPU всё обучается за 10—30 секу
 **ДЗ 1 (обязательно, ~45—60 мин).** Заполнить 3 `TODO` в этом ноутбуке.
 Критерии приёма:
 
-- [ ] CatBoost AUC ≥ 0.84.
-- [ ] В сравнительной таблице видны цифры обеих моделей (LogReg и CatBoost).
-- [ ] `shap_summary.png` сохранён, топ-фичи биологически осмысленны.
+- [ ] CatBoost RMSE ≤ 0.135 на log-цене.
+- [ ] В сравнительной таблице видны цифры обеих моделей (Ridge и CatBoost).
+- [ ] `shap_summary.png` сохранён, топ-фичи биологически осмысленны (`OverallQual`, `GrLivArea`, `Neighborhood`).
 - [ ] `shap_waterfall.png` сохранён + одна фраза-объяснение.
 - [ ] Ссылка на ноутбук прислана в чат курса как `[Модуль 3, ДЗ 1] {ссылка}`.
 
-**ДЗ 2 (опционально, ~60 мин).** Взять **любой** Kaggle-датасет
-(Bank Marketing, House Prices, Credit Default, Adult Income) и
-повторить пайплайн без подсказок.
+**ДЗ 2 (опционально, ~60 мин).** Взять **любой другой** Kaggle-датасет
+(Telco Churn, Bank Marketing, Credit Default, Adult Income, Titanic)
+и повторить пайплайн без подсказок.
 
 ## Подводные камни
 
-- **`cat_features` забыли** → CatBoost либо ругнётся `ValueError`, либо обучится с AUC ~0.55. Всегда: `cat_features = X.select_dtypes(include='object').columns.tolist()`.
-- **`eval_set` забыли** → `early_stopping_rounds` не работает, модель жарит все 1000 итераций и переобучается.
+- **`cat_features` забыли** → CatBoost либо ругнётся `ValueError`, либо обучится с ужасным качеством. Всегда: `cat_features = X.select_dtypes(include='object').columns.tolist()`.
+- **`NaN` в категориальной колонке** → `CatBoostError`. Лекарство — одна строка: `X[c] = X[c].fillna('missing').astype(str)` для всех cat-колонок до `.fit()`. В Ames Housing таких колонок ~16 (PoolQC, FireplaceQu и т.п.).
+- **`eval_set` забыли** → `early_stopping_rounds` не работает, модель жарит все `iterations` и переобучается.
+- **Учим на сыром `SalePrice`** вместо `log(SalePrice)` → RMSE будет в долларах (десятки тысяч) и абсолютно бесполезен для сравнения. Используйте `np.log1p(y)` для обучения и `np.expm1(pred)` для интерпретации.
 
 ## Лицензия
 
 Код — MIT (см. [LICENSE](../../LICENSE) в корне репо). Датасет —
-Telco Customer Churn, опубликован IBM и доступен на Kaggle под
-открытой лицензией.
+Ames Housing (Dean De Cock, 2011), public domain, опубликован на
+Kaggle и в OpenML.
