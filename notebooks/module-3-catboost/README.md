@@ -23,9 +23,8 @@
 1. Грузите [Telco Customer Churn](https://www.kaggle.com/datasets/blastchar/telco-customer-churn) (7 043 строки, 16 категориальных фичей).
 2. Обучаете бейзлайн — логистическую регрессию с OneHotEncoder. Получаете AUC ≈ 0.82.
 3. **TODO 1.** Обучаете `CatBoostClassifier` с `cat_features` + `early_stopping_rounds`. Цель — AUC ≥ 0.84 без feature engineering'а.
-4. **TODO 2.** Делаете то же на `XGBoost` (`enable_categorical=True`) и `LightGBM` (`categorical_feature=...`). Сравниваете три AUC и время обучения в одной табличке.
-5. **TODO 3.** Строите `shap.summary_plot` для лучшей модели, сохраняете `shap_summary.png`, отвечаете одной фразой про топ-3 фичи оттока.
-6. **TODO 4.** Для одного клиента с `P(churn) > 0.8` строите `waterfall_plot`, сохраняете `shap_waterfall.png`, описываете одной фразой, что в его профиле триггерит модель.
+4. **TODO 2.** Строите `shap.summary_plot` для CatBoost-модели, сохраняете `shap_summary.png`, отвечаете одной фразой про топ-3 фичи оттока.
+5. **TODO 3.** Для одного клиента с `P(churn) > 0.8` строите `waterfall_plot`, сохраняете `shap_waterfall.png`, описываете одной фразой, что в его профиле триггерит модель.
 
 ## Как запустить
 
@@ -46,7 +45,7 @@
 ### Вариант C — локально
 
 ```bash
-pip install jupyter pandas scikit-learn catboost xgboost lightgbm shap matplotlib
+pip install jupyter pandas scikit-learn catboost shap matplotlib
 jupyter notebook notebook.ipynb
 ```
 
@@ -56,11 +55,11 @@ GPU не нужен — на CPU всё обучается за 10—30 секу
 
 Полное ДЗ описано в [самой лекции](https://itrubnikov.github.io/Train_of_Thought/docs/modules/03-catboost/#домашнее-задание). Кратко:
 
-**ДЗ 1 (обязательно, ~90 мин).** Заполнить 4 `TODO` в этом ноутбуке.
+**ДЗ 1 (обязательно, ~45—60 мин).** Заполнить 3 `TODO` в этом ноутбуке.
 Критерии приёма:
 
 - [ ] CatBoost AUC ≥ 0.84.
-- [ ] В сравнительной таблице видны цифры всех 4 моделей (LogReg, CatBoost, XGBoost, LightGBM).
+- [ ] В сравнительной таблице видны цифры обеих моделей (LogReg и CatBoost).
 - [ ] `shap_summary.png` сохранён, топ-фичи биологически осмысленны.
 - [ ] `shap_waterfall.png` сохранён + одна фраза-объяснение.
 - [ ] Ссылка на ноутбук прислана в чат курса как `[Модуль 3, ДЗ 1] {ссылка}`.
@@ -73,8 +72,6 @@ GPU не нужен — на CPU всё обучается за 10—30 секу
 
 - **`cat_features` забыли** → CatBoost либо ругнётся `ValueError`, либо обучится с AUC ~0.55. Всегда: `cat_features = X.select_dtypes(include='object').columns.tolist()`.
 - **`eval_set` забыли** → `early_stopping_rounds` не работает, модель жарит все 1000 итераций и переобучается.
-- **`enable_categorical=True` в XGBoost требует `tree_method='hist'`** — без него получите `ValueError`.
-- **LightGBM хочет, чтобы категории были `category`-dtype** (`X[c].astype('category')`), иначе `categorical_feature` игнорируется.
 
 ## Лицензия
 
