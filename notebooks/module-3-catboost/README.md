@@ -37,25 +37,57 @@
 ячейки → `Поделиться → у кого есть ссылка → Просмотр` → прислать
 ссылку в чат курса.
 
-### Вариант B — Kaggle Notebooks
+### Вариант B — Kaggle Notebooks (требует 4 клика подготовки)
 
-`Create → New Notebook → File → Import Notebook` → выберите
-`notebook.ipynb` из своего форка этого репо (или прямо
-[raw-ссылку с GitHub](https://raw.githubusercontent.com/ITrubnikov/Train_of_Thought-homework/main/notebooks/module-3-catboost/notebook.ipynb)).
+У Kaggle-ноутбуков по умолчанию **выключен внешний интернет**, поэтому
+`fetch_openml` оттуда обычно не дотягивается до OpenML (а если и
+дотягивается — их сервера регулярно отвечают 504). На Kaggle правильно
+брать данные **из подключённого competition'а**, и это занимает 30 секунд.
 
-**Один шаг перед запуском в Kaggle:** датасет надо подключить, потому
-что у Kaggle-ноутбуков по умолчанию **выключен внешний интернет**, а
-`fetch_openml` ходит на api.openml.org. Способа два:
+**Полный workflow с нуля:**
 
-- **Подключить competition-датасет (рекомендую).** Справа в ноутбуке
-  открой панель `Notebook Settings` (она же `Input` → `Add Input`)
-  → `Competitions` → найди **«House Prices - Advanced Regression
-  Techniques»** → `Add`. После этого `/kaggle/input/...` появится в
-  файловой системе, ноутбук подхватит данные оттуда автоматически
-  (try-fallback в первой ячейке загрузки).
-- **Или включить Internet.** `Notebook Settings → Internet → On`.
-  Требует phone-verified аккаунт. Тогда `fetch_openml` отработает
-  как в Colab.
+1. **Создайте ноутбук из этого файла.**
+   - На Kaggle сверху-слева: `+ Create` → `New Notebook`.
+   - В новом ноутбуке: `File → Import Notebook → URL`, вставьте
+     raw-ссылку: `https://raw.githubusercontent.com/ITrubnikov/Train_of_Thought-homework/main/notebooks/module-3-catboost/notebook.ipynb`.
+2. **Подключите датасет House Prices.**
+   - Справа найдите панель **«Notebook»** → секция **«Input»** →
+     кнопка **`+ Add Input`**.
+   - В открывшемся окне переключите вкладку наверху на **«Competitions»**
+     (по умолчанию там «Your Work» / «Datasets»).
+   - В поиске наберите `House Prices`. Выберите карточку
+     **«House Prices — Advanced Regression Techniques»** (Ongoing,
+     5132 Teams, Getting Started — с иконкой домика с табличкой
+     «SOLD»). Жмите **`+`** справа.
+   - Закройте окно — в правой панели под «COMPETITIONS» появится
+     этот competition с файлами `train.csv`, `test.csv`,
+     `sample_submission.csv`, `data_description.txt`.
+3. **Сделайте Restart Session — это обязательно.**
+   - В верхнем меню: `Run → Restart Session`.
+   - Без этого kernel продолжит работать со старым `/kaggle/input/`,
+     где `train.csv` ещё нет, и вы получите `FileNotFoundError`.
+     Это самая частая ловушка новичков на Kaggle.
+4. **Прогоните ячейки сверху вниз.** Загрузочная ячейка использует
+   `glob.glob('/kaggle/input/**/train.csv', recursive=True)` — это
+   ловит и плоский (`/kaggle/input/<slug>/`), и вложенный
+   (`/kaggle/input/competitions/<slug>/`) layout, который Kaggle
+   использует для разных типов аккаунтов.
+
+После шага 3 в любой свободной ячейке можно проверить:
+
+```python
+import glob
+print(glob.glob('/kaggle/input/**/train.csv', recursive=True))
+```
+
+Должен вывести один путь типа
+`/kaggle/input/competitions/house-prices-advanced-regression-techniques/train.csv`.
+Если пусто — значит либо competition не подключился (вернитесь к
+шагу 2), либо забыли `Restart Session` (вернитесь к шагу 3).
+
+**Альтернатива на Kaggle:** включить `Notebook → Internet → On`
+(требует phone-verified аккаунт). Тогда `fetch_openml` отработает
+как в Colab — но это менее надёжно, OpenML регулярно отвечает 504.
 
 ### Вариант C — локально
 
@@ -87,7 +119,9 @@ GPU не нужен — на CPU всё обучается за 20—40 секу
 
 ## Подводные камни
 
-- **`HTTPError` / `A network error occurred` на `fetch_openml`** → вы на Kaggle, и у ноутбука выключен интернет. Подключите competition-датасет (`Notebook Settings → Add Input → Competitions → "House Prices - Advanced Regression Techniques"`) либо включите Internet в настройках ноутбука. См. раздел «Вариант B — Kaggle Notebooks» выше.
+- **`HTTPError` / `A network error occurred` / `504 Gateway Time-out` на `fetch_openml`** → вы на Kaggle либо без интернета, либо OpenML лёг (у них регулярно). Подключите competition-датасет через `Add Input → Competitions → "House Prices"` + сделайте `Run → Restart Session`. См. «Вариант B — Kaggle Notebooks» выше. Если включали Internet, но он всё равно даёт 504 — это сервер OpenML, не Kaggle. Лекарство — competition-путь, он не требует HTTP вообще.
+- **`FileNotFoundError: /kaggle/input/.../train.csv`** → competition подключили, но **забыли `Restart Session`**. Kernel запущен ДО подключения данных и их не видит. `Run → Restart Session`, потом снова с начала. Sanity-check: `!ls /kaggle/input/` должен показать папки с данными.
+- **`!ls /kaggle/input/` показывает `competitions`, а не имя датасета** → это вложенный layout. Реальный путь — `/kaggle/input/competitions/<slug>/train.csv`. Загрузочная ячейка в ноутбуке использует `glob.glob('/kaggle/input/**/train.csv', recursive=True)` и сама разруливает оба варианта — править ничего не нужно.
 - **`cat_features` забыли** → CatBoost либо ругнётся `ValueError`, либо обучится с ужасным качеством. Всегда: `cat_features = X.select_dtypes(include='object').columns.tolist()`.
 - **`NaN` в категориальной колонке** → `CatBoostError`. Лекарство — одна строка: `X[c] = X[c].fillna('missing').astype(str)` для всех cat-колонок до `.fit()`. В Ames Housing таких колонок ~16 (PoolQC, FireplaceQu и т.п.).
 - **`eval_set` забыли** → `early_stopping_rounds` не работает, модель жарит все `iterations` и переобучается.
