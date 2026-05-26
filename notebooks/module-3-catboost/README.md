@@ -17,6 +17,7 @@
 | Файл | Зачем |
 | --- | --- |
 | [`notebook.ipynb`](notebook.ipynb) | Скелет с 3 `TODO`. Грузит House Prices (Ames Housing), обучает бейзлайн Ridge-регрессии, дальше вы дописываете CatBoost и SHAP. Цель — обогнать бейзлайн (RMSE ≤ 0.135 на log-цене) и научиться читать SHAP. |
+| `solution.ipynb` | Эталонное решение **для преподавателя** и для самопроверки после своей попытки. Открывайте только когда `TODO` уже честно попытались сделать сами — иначе пропустите главный кайф «вот оно работает». |
 
 ## Что вы делаете в ноутбуке
 
@@ -42,6 +43,20 @@
 `notebook.ipynb` из своего форка этого репо (или прямо
 [raw-ссылку с GitHub](https://raw.githubusercontent.com/ITrubnikov/Train_of_Thought-homework/main/notebooks/module-3-catboost/notebook.ipynb)).
 
+**Один шаг перед запуском в Kaggle:** датасет надо подключить, потому
+что у Kaggle-ноутбуков по умолчанию **выключен внешний интернет**, а
+`fetch_openml` ходит на api.openml.org. Способа два:
+
+- **Подключить competition-датасет (рекомендую).** Справа в ноутбуке
+  открой панель `Notebook Settings` (она же `Input` → `Add Input`)
+  → `Competitions` → найди **«House Prices - Advanced Regression
+  Techniques»** → `Add`. После этого `/kaggle/input/...` появится в
+  файловой системе, ноутбук подхватит данные оттуда автоматически
+  (try-fallback в первой ячейке загрузки).
+- **Или включить Internet.** `Notebook Settings → Internet → On`.
+  Требует phone-verified аккаунт. Тогда `fetch_openml` отработает
+  как в Colab.
+
 ### Вариант C — локально
 
 ```bash
@@ -60,6 +75,8 @@ GPU не нужен — на CPU всё обучается за 20—40 секу
 
 - [ ] CatBoost RMSE ≤ 0.135 на log-цене.
 - [ ] В сравнительной таблице видны цифры обеих моделей (Ridge и CatBoost).
+- [ ] `predicted_vs_actual.png` сохранён — облако CatBoost явно плотнее к диагонали, чем у Ridge.
+- [ ] `line_vs_function.png` сохранён — Ridge даёт прямую линию, CatBoost рисует ступенчатую кривую.
 - [ ] `shap_summary.png` сохранён, топ-фичи биологически осмысленны (`OverallQual`, `GrLivArea`, `Neighborhood`).
 - [ ] `shap_waterfall.png` сохранён + одна фраза-объяснение.
 - [ ] Ссылка на ноутбук прислана в чат курса как `[Модуль 3, ДЗ 1] {ссылка}`.
@@ -70,6 +87,7 @@ GPU не нужен — на CPU всё обучается за 20—40 секу
 
 ## Подводные камни
 
+- **`HTTPError` / `A network error occurred` на `fetch_openml`** → вы на Kaggle, и у ноутбука выключен интернет. Подключите competition-датасет (`Notebook Settings → Add Input → Competitions → "House Prices - Advanced Regression Techniques"`) либо включите Internet в настройках ноутбука. См. раздел «Вариант B — Kaggle Notebooks» выше.
 - **`cat_features` забыли** → CatBoost либо ругнётся `ValueError`, либо обучится с ужасным качеством. Всегда: `cat_features = X.select_dtypes(include='object').columns.tolist()`.
 - **`NaN` в категориальной колонке** → `CatBoostError`. Лекарство — одна строка: `X[c] = X[c].fillna('missing').astype(str)` для всех cat-колонок до `.fit()`. В Ames Housing таких колонок ~16 (PoolQC, FireplaceQu и т.п.).
 - **`eval_set` забыли** → `early_stopping_rounds` не работает, модель жарит все `iterations` и переобучается.
