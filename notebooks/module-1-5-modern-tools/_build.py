@@ -9,15 +9,24 @@ Outputs:
   homework/practice-aistudio.ipynb
 """
 
+import hashlib
 import json
 from pathlib import Path
 
 HERE = Path(__file__).parent
 
 
+def _cell_id(text: str) -> str:
+    """Deterministic cell id. nbformat_minor>=5 requires every cell to have
+    an `id`; without it GitHub's notebook renderer fails with
+    "An error occurred"."""
+    return hashlib.sha1(text.encode()).hexdigest()[:12]
+
+
 def md(text: str) -> dict:
     return {
         "cell_type": "markdown",
+        "id": _cell_id("md:" + text),
         "metadata": {},
         "source": text.rstrip("\n").splitlines(keepends=True),
     }
@@ -26,6 +35,7 @@ def md(text: str) -> dict:
 def code(text: str) -> dict:
     return {
         "cell_type": "code",
+        "id": _cell_id("code:" + text),
         "execution_count": None,
         "metadata": {},
         "outputs": [],
