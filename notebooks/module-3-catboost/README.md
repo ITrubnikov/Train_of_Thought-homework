@@ -22,7 +22,7 @@
 ## Что вы делаете в ноутбуке
 
 1. Грузите [House Prices — Advanced Regression Techniques](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques) (Ames Housing, 1 460 домов, 80 признаков, 43 категориальных) через `sklearn.datasets.fetch_openml` — никакой Kaggle API не нужен.
-2. Обучаете бейзлайн — `Ridge` (линейная регрессия с L2-регуляризацией) с OneHotEncoder и StandardScaler. Получаете RMSE ≈ 0.16—0.18 на log(SalePrice).
+2. Обучаете бейзлайн — `Ridge` (линейная регрессия с L2-регуляризацией) с OneHotEncoder и StandardScaler. Получаете RMSE ≈ 0.135—0.14 на log(SalePrice) — это уже сильный бейзлайн, CatBoost обгонит его лишь немного.
 3. **TODO 1.** Обучаете `CatBoostRegressor` с `cat_features` + `early_stopping_rounds`. Цель — RMSE ≤ 0.135 без feature engineering'а.
 4. **TODO 2.** Строите `shap.summary_plot` для CatBoost-модели, сохраняете `shap_summary.png`, отвечаете одной фразой про топ-3 фичи, двигающие цену.
 5. **TODO 3.** Для **самого дорогого** дома в тесте строите `waterfall_plot`, сохраняете `shap_waterfall.png`, описываете одной фразой, какие фичи задрали его цену.
@@ -105,7 +105,7 @@ GPU не нужен — на CPU всё обучается за 20—40 секу
 
 - [ ] CatBoost RMSE ≤ 0.135 на log-цене.
 - [ ] В сравнительной таблице видны цифры обеих моделей (Ridge и CatBoost).
-- [ ] `predicted_vs_actual.png` сохранён — облако CatBoost явно плотнее к диагонали, чем у Ridge.
+- [ ] `predicted_vs_actual.png` сохранён — обе модели плотно лежат на диагонали (на этой табличке Ridge и CatBoost близки, и это нормально).
 - [ ] `line_vs_function.png` сохранён — Ridge даёт прямую линию, CatBoost рисует ступенчатую кривую.
 - [ ] `shap_summary.png` сохранён, топ-фичи биологически осмысленны (`OverallQual`, `GrLivArea`, `Neighborhood`).
 - [ ] `shap_waterfall.png` сохранён + одна фраза-объяснение.
