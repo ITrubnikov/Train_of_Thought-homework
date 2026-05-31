@@ -86,6 +86,7 @@
 | Папка | Модуль курса | Что внутри |
 | --- | --- | --- |
 | [`notebooks/module-1-5-modern-tools/`](notebooks/module-1-5-modern-tools/) | [Модуль 1.5 — Где живёт современный ИИ](https://itrubnikov.github.io/Train_of_Thought/docs/modules/01-5-modern-tools/) | `presenter-demo` для лекции, два тура (Kaggle / HF), три отдельные практики (по одной на площадку), плюс опциональный Day 1 prompting. |
+| [`notebooks/module-5-5-llm-mental-model/`](notebooks/module-5-5-llm-mental-model/) | [Модуль 5.5 — Как LLM думает](https://itrubnikov.github.io/Train_of_Thought/docs/modules/05-5-llm-mental-model/) | Интерактивные виджеты: токенизация (tiktoken), ползунки семплинга (temperature/top-p/top-k), проверка детерминизма. Начните с `notebook.ipynb`. |
 | [`notebooks/module-7-rag/`](notebooks/module-7-rag/) | [Модуль 7 — RAG, который работает](https://itrubnikov.github.io/Train_of_Thought/docs/modules/07-rag/) | Day 2 — эмбеддинги + cosine similarity heatmap. Геометрическая интуиция под весь RAG. |
 | [`notebooks/module-8-what-is-agent/`](notebooks/module-8-what-is-agent/) | [Модуль 8 — Что такое агент](https://itrubnikov.github.io/Train_of_Thought/docs/modules/08-what-is-agent/) | Day 3 — первый агент с function calling над SQLite. |
 | [`notebooks/module-10-smolagents/`](notebooks/module-10-smolagents/) | [Модуль 10 — smolagents](https://itrubnikov.github.io/Train_of_Thought/docs/modules/10-smolagents/) | HF Agents Course Unit 2.1 — tool-ы в smolagents (`@tool`, subclass, default toolbox, Hub-шеринг, Spaces, MCP). |
