@@ -62,18 +62,15 @@
    - Закройте окно — в правой панели под «COMPETITIONS» появится
      этот competition с файлами `train.csv`, `test.csv`,
      `sample_submission.csv`, `data_description.txt`.
-3. **Сделайте Restart Session — это обязательно.**
-   - В верхнем меню: `Run → Restart Session`.
-   - Без этого kernel продолжит работать со старым `/kaggle/input/`,
-     где `train.csv` ещё нет, и вы получите `FileNotFoundError`.
-     Это самая частая ловушка новичков на Kaggle.
-4. **Прогоните ячейки сверху вниз.** Загрузочная ячейка использует
+3. **Прогоните ячейки сверху вниз.** Kaggle монтирует подключённый
+   competition в работающий kernel сразу — рестарт обычно не нужен.
+   Загрузочная ячейка использует
    `glob.glob('/kaggle/input/**/train.csv', recursive=True)` — это
    ловит и плоский (`/kaggle/input/<slug>/`), и вложенный
    (`/kaggle/input/competitions/<slug>/`) layout, который Kaggle
    использует для разных типов аккаунтов.
 
-После шага 3 в любой свободной ячейке можно проверить:
+В любой свободной ячейке можно проверить, что данные на месте:
 
 ```python
 import glob
@@ -82,8 +79,9 @@ print(glob.glob('/kaggle/input/**/train.csv', recursive=True))
 
 Должен вывести один путь типа
 `/kaggle/input/competitions/house-prices-advanced-regression-techniques/train.csv`.
-Если пусто — значит либо competition не подключился (вернитесь к
-шагу 2), либо забыли `Restart Session` (вернитесь к шагу 3).
+Если пусто — competition не подключился (вернитесь к шагу 2). В
+редких случаях kernel не видит свежесмонтированные данные — тогда
+`Run → Restart Session` и снова сверху.
 
 **Альтернатива на Kaggle:** включить `Notebook → Internet → On`
 (требует phone-verified аккаунт). Тогда `fetch_openml` отработает
@@ -119,8 +117,8 @@ GPU не нужен — на CPU всё обучается за 20—40 секу
 
 ## Подводные камни
 
-- **`HTTPError` / `A network error occurred` / `504 Gateway Time-out` на `fetch_openml`** → вы на Kaggle либо без интернета, либо OpenML лёг (у них регулярно). Подключите competition-датасет через `Add Input → Competitions → "House Prices"` + сделайте `Run → Restart Session`. См. «Вариант B — Kaggle Notebooks» выше. Если включали Internet, но он всё равно даёт 504 — это сервер OpenML, не Kaggle. Лекарство — competition-путь, он не требует HTTP вообще.
-- **`FileNotFoundError: /kaggle/input/.../train.csv`** → competition подключили, но **забыли `Restart Session`**. Kernel запущен ДО подключения данных и их не видит. `Run → Restart Session`, потом снова с начала. Sanity-check: `!ls /kaggle/input/` должен показать папки с данными.
+- **`HTTPError` / `A network error occurred` / `504 Gateway Time-out` на `fetch_openml`** → вы на Kaggle либо без интернета, либо OpenML лёг (у них регулярно). Подключите competition-датасет через `Add Input → Competitions → "House Prices"`. См. «Вариант B — Kaggle Notebooks» выше. Если включали Internet, но он всё равно даёт 504 — это сервер OpenML, не Kaggle. Лекарство — competition-путь, он не требует HTTP вообще.
+- **`FileNotFoundError: /kaggle/input/.../train.csv`** → competition не подключён, либо подключён, но kernel его не видит. Sanity-check: `!ls /kaggle/input/` должен показать папки с данными. Если папки есть, а ячейка падает — перезапустите загрузочную ячейку. Если `/kaggle/input/` пуст — подключите competition (см. шаг 2) и в редком случае сделайте `Run → Restart Session`.
 - **`!ls /kaggle/input/` показывает `competitions`, а не имя датасета** → это вложенный layout. Реальный путь — `/kaggle/input/competitions/<slug>/train.csv`. Загрузочная ячейка в ноутбуке использует `glob.glob('/kaggle/input/**/train.csv', recursive=True)` и сама разруливает оба варианта — править ничего не нужно.
 - **`cat_features` забыли** → CatBoost либо ругнётся `ValueError`, либо обучится с ужасным качеством. Всегда: `cat_features = X.select_dtypes(include='object').columns.tolist()`.
 - **`NaN` в категориальной колонке** → `CatBoostError`. Лекарство — одна строка: `X[c] = X[c].fillna('missing').astype(str)` для всех cat-колонок до `.fit()`. В Ames Housing таких колонок ~16 (PoolQC, FireplaceQu и т.п.).
