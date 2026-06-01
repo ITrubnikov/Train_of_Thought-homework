@@ -19,16 +19,14 @@
 
 | Файл | Зачем |
 | --- | --- |
+| [`notebook.ipynb`](notebook.ipynb) | Студенческий ноутбук с **3 `TODO`** в Заходе 1 (шаг обучения, сэмплинг, push на Hub). Заход 2 (BPE + `Trainer`) идёт готовым кодом. Конфиг сам подстраивается под железо (T4 → полный, CPU → урезанный). |
+| `solution.ipynb` | Эталон **для самопроверки**: те же `TODO` заполнены, прогоняется сверху вниз. Открывайте только после честной попытки — иначе пропустите главный кайф «вот оно учится». |
 | [`data/README.md`](data/README.md) | Три способа получить корпус Пушкина (HF datasets / Wikisource / az.lib.ru). Public-domain, размер 0.5—5 МБ. |
 | [`data/prepare_corpus.py`](data/prepare_corpus.py) | Скрипт-помощник: склейка нескольких `.txt`, конвертация кодировок, базовая чистка. |
 
-⚠ **Готового notebook.ipynb здесь пока нет.** Этот модуль идёт
-«ноутбуком прямо из лекции» — код лежит блоками в самой [лекции
-модуля 5](https://itrubnikov.github.io/Train_of_Thought/docs/modules/05-own-gpt/),
-вы копируете секции в свой Kaggle/Colab-ноутбук по мере прохождения.
-Так задумано: модуль про то, чтобы вы один раз руками собрали
-pretraining-пайплайн, а не нажали «Run All». Если решим завернуть
-в shipped-ноутбук — он появится здесь как `notebook.ipynb`.
+Ноутбук сам качает корпус Пушкина (готовый `train.txt` из HF-датасета
+`abobster/pushkin`, ~0.86 МБ, public domain) — `data/` нужна, только если
+хотите собрать **свой** корпус для ДЗ через `prepare_corpus.py`.
 
 ## Что вы делаете
 
@@ -49,25 +47,31 @@ pretraining-пайплайн, а не нажали «Run All». Если реш�
 
 ## Как запустить
 
-### Вариант A — Kaggle Notebooks (рекомендуется, GPU T4 бесплатно)
+### Вариант A — Google Colab (одной кнопкой)
 
-`Create → New Notebook` → ноутбук пишете руками, копируя секции из
-[лекции](https://itrubnikov.github.io/Train_of_Thought/docs/modules/05-own-gpt/).
-Включите `Accelerator → GPU T4`. HF token — через `Add-ons → Secrets`
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-5-own-gpt/notebook.ipynb)
+
+`Файл → Сохранить копию на Диске` → `Runtime → Change runtime type → T4 GPU`
+→ дописать 3 `TODO` → запустить все ячейки. HF token — через `notebook_login()`
+или Colab Secrets (`HF_TOKEN`).
+
+### Вариант B — Kaggle Notebooks (GPU T4 бесплатно)
+
+`+ Create → New Notebook → File → Import Notebook → URL`, вставьте raw-ссылку:
+`https://raw.githubusercontent.com/ITrubnikov/Train_of_Thought-homework/main/notebooks/module-5-own-gpt/notebook.ipynb`.
+Включите `Settings → Accelerator → GPU T4`. HF token — через `Add-ons → Secrets`
 с именем `HF_TOKEN`.
-
-### Вариант B — Google Colab
-
-`File → New Notebook` → включите runtime T4 GPU. HF token подкладывайте
-через `notebook_login()` или Colab Secrets (`HF_TOKEN`).
 
 ### Вариант C — Локально с GPU
 
 ```bash
-pip install torch transformers datasets huggingface_hub
+pip install torch transformers tokenizers datasets huggingface_hub "accelerate>=1.1.0"
 huggingface-cli login
-# дальше копируйте код из лекции по секциям
+jupyter notebook notebook.ipynb
 ```
+
+Без GPU ноутбук тоже пройдёт (конфиг сам урежется), но результат будет
+слабее — для настоящего прогона нужен T4.
 
 ## ДЗ к модулю
 
@@ -91,6 +95,12 @@ huggingface-cli login
   забыли — будет каша в `chars = sorted(set(text))`.
 - **Char-level модель учит структуру, но без смысла** — это **не
   баг**, это главный урок модуля.
+- **BPE-токенизатор грузится с пустым словарём (`vocab_size == 0`)** —
+  в свежих `transformers` путь `GPT2TokenizerFast(vocab_file=, merges_file=)`
+  ломается. В ноутбуке используется рабочий путь: `bpe.save("…/tokenizer.json")`
+  + `PreTrainedTokenizerFast(tokenizer_file=…)`.
+- **`Trainer` падает с `requires accelerate>=1.1.0`** — поставьте
+  `accelerate` (ячейка установки в ноутбуке это уже делает).
 
 ## Лицензия
 
