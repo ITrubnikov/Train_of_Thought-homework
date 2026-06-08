@@ -301,9 +301,9 @@ loss за 20 шагов уходит ниже `0.01`.
 - **Kaggle:** `+ Create → New Notebook`, вставь тот же код. Input не нужен.
 - **Локально:** сохрани код в `micrograd.py`, запусти `python3 micrograd.py`.
 
-## Канонический источник
+## Если хочется глубже
 
-Лучшее объяснение на свете — видео Карпатого
+Подробный разбор этой темы — видео Карпатого
 [«The spelled-out intro to neural networks and backpropagation»](https://www.youtube.com/watch?v=VMj-3S1tku0)
 (2 ч) и репозиторий [micrograd](https://github.com/karpathy/micrograd).
 Наш модуль — сжатая выжимка; за полным выводом каждой производной идите туда.
