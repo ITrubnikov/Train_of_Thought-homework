@@ -21,7 +21,7 @@
 | --- | --- |
 | [`notebook.ipynb`](notebook.ipynb) | Студенческий ноутбук с **3 `TODO`** в Заходе 1 (шаг обучения, сэмплинг, push на Hub). Заход 2 (BPE + `Trainer`) идёт готовым кодом. Конфиг сам подстраивается под железо (T4 → полный, CPU → урезанный). |
 | `solution.ipynb` | Эталон **для самопроверки**: те же `TODO` заполнены, прогоняется сверху вниз. Открывайте только после честной попытки — иначе пропустите главный кайф «вот оно учится». |
-| [`data/README.md`](data/README.md) | Три способа получить корпус Пушкина (HF datasets / Wikisource / az.lib.ru). Public-domain, размер 0.5—5 МБ. |
+| [`data/README.md`](data/README.md) | Три способа получить корпус Пушкина (HF datasets / Wikisource / az.lib.ru). Public-domain, канонический `train.txt` ≈ 0.86 МБ (~1 МБ). |
 | [`data/prepare_corpus.py`](data/prepare_corpus.py) | Скрипт-помощник: склейка нескольких `.txt`, конвертация кодировок, базовая чистка. |
 
 Ноутбук сам качает корпус Пушкина (готовый `train.txt` из HF-датасета
@@ -36,7 +36,7 @@
    PyTorch, ручной train loop. Цель — увидеть, что модель учит ритм
    и окончания, но не смысл.
 3. **Заход 2: BPE-1024 + `transformers.Trainer`.** Тот же датасет,
-   токенизатор BPE на 1024 merge-операций, готовый `GPT2Config` +
+   BPE-токенизатор со словарём 1024 токена, готовый `GPT2Config` +
    `Trainer`. Цель — увидеть, во что превращается тот же workflow в
    «инженерном» виде.
 4. **Push to Hub.** Обе модели заливаются в свой HF-аккаунт через
@@ -75,7 +75,7 @@ jupyter notebook notebook.ipynb
 
 ## ДЗ к модулю
 
-Полный текст ДЗ — в [самой лекции](https://itrubnikov.github.io/Train_of_Thought/docs/modules/05-own-gpt/#домашнее-задание).
+Полный текст ДЗ — в [самой лекции](https://itrubnikov.github.io/Train_of_Thought/docs/modules/05-own-gpt/#домашка).
 
 **Критерии приёмки (кратко):**
 
