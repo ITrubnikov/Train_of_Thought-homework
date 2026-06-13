@@ -19,8 +19,8 @@
 
 | Файл | Зачем |
 | --- | --- |
-| [`notebook.ipynb`](notebook.ipynb) | Студенческий ноутбук с **3 `TODO`** в Заходе 1 (шаг обучения, сэмплинг, push на Hub). Заход 2 (BPE + `Trainer`) идёт готовым кодом. Конфиг сам подстраивается под железо (T4 → полный, CPU → урезанный). |
-| `solution.ipynb` | Эталон **для самопроверки**: те же `TODO` заполнены, прогоняется сверху вниз. Открывайте только после честной попытки — иначе пропустите главный кайф «вот оно учится». |
+| [`notebook.ipynb`](notebook.ipynb) | Рабочий ноутбук: проходит `Run all` целиком (Заход 1 char-level руками + Заход 2 BPE через `Trainer`), весь код объяснён построчно. Активность — в финальной секции «Задачи». Конфиг сам подстраивается под железо (T4 → полный, CPU → урезанный). |
+| `solution.ipynb` | Прежний reference solution (legacy, до перехода на рабочий ноутбук). Теперь основной `notebook.ipynb` сам проходит целиком, так что отдельное решение не нужно. |
 | [`data/README.md`](data/README.md) | Три способа получить корпус Пушкина (HF datasets / Wikisource / az.lib.ru). Public-domain, канонический `train.txt` ≈ 0.86 МБ (~1 МБ). |
 | [`data/prepare_corpus.py`](data/prepare_corpus.py) | Скрипт-помощник: склейка нескольких `.txt`, конвертация кодировок, базовая чистка. |
 
@@ -52,8 +52,8 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-5-own-gpt/notebook.ipynb)
 
 `Файл → Сохранить копию на Диске` → `Runtime → Change runtime type → T4 GPU`
-→ дописать 3 `TODO` → запустить все ячейки. HF token — через `notebook_login()`
-или Colab Secrets (`HF_TOKEN`).
+→ `Runtime → Run all` → выполнить задачи в конце ноутбука. HF token — через
+`notebook_login()` или Colab Secrets (`HF_TOKEN`).
 
 ### Вариант B — Kaggle Notebooks (GPU T4 бесплатно)
 
