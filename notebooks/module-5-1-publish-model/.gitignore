@@ -1,0 +1,5 @@
+# Артефакты прогона ноутбуков (не коммитим)
+my-model/
+pushkin-bpe-hf/
+llama.cpp/
+*.gguf
