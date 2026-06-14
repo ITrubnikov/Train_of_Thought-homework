@@ -5,7 +5,9 @@
 ## Как запустить
 
 - **`notebook.ipynb`** — демо: берём готовую `HOhus/pushkin-nano-bpe` и публикуем
-  под своим именем. Открыть в
+  под своим именем. Бонус-шаг (Шаг 4) — конвертация в GGUF и заливка
+  `<username>/pushkin-nano-bpe-GGUF` для LM Studio (готовый пример:
+  `HOhus/pushkin-nano-bpe-GGUF`). Открыть в
   [Colab](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-5-1-publish-model/notebook.ipynb).
 - **`notebook-blank.ipynb`** — то же, но шаг публикации пишешь сам. Открыть в
   [Colab](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-5-1-publish-model/notebook-blank.ipynb).
