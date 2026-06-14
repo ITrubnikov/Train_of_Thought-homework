@@ -1,6 +1,6 @@
-# Модуль 6 — LLM API на практике
+# Модуль 6.4 — LLM API на практике (прямой SDK)
 
-Домашка к [Модулю 6: LLM API на практике](https://itrubnikov.github.io/Train_of_Thought/docs/modules/06-llm-api/).
+Домашка к [Модулю 6.4: LLM API на практике](https://itrubnikov.github.io/Train_of_Thought/docs/modules/06-4-llm-api/).
 
 Здесь вы соберёте три маленькие утилиты на реальном API: **summarizer** (со streaming), **классификатор писем** (structured output) и **переводчик-редактор** (многоходовый диалог). На выходе — три работающие функции в вашем ноутбуке.
 
@@ -25,7 +25,7 @@
 
 ## Как запустить
 ### Вариант A — Colab
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-6-llm-api/notebook.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-6-4-llm-api/notebook.ipynb)
 
 Нажмите бейдж. Добавьте ключ через `🔑 Secrets` (имя `ANTHROPIC_API_KEY`), затем `Runtime → Run all`. GPU не нужен. Первая ячейка подтянет ключ из Colab Secrets автоматически.
 
@@ -38,7 +38,7 @@
 ### Вариант C — локально
 ```bash
 git clone https://github.com/ITrubnikov/Train_of_Thought-homework.git
-cd Train_of_Thought-homework/notebooks/module-6-llm-api
+cd Train_of_Thought-homework/notebooks/module-6-4-llm-api
 cp .env.example .env   # впишите свой ключ
 python -m venv .venv && source .venv/bin/activate
 pip install anthropic openai python-dotenv pydantic
