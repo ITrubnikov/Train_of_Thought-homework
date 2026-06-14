@@ -1,0 +1,9 @@
+# Артефакты прогона ноутбука — генерируются при запуске, в репо не нужны.
+# (Студент получает чистый notebook.ipynb; данные и веса он создаёт сам.)
+*.png
+*.bin
+vocab.json
+config.json
+data/pushkin.txt
+pushkin-bpe/
+pushkin-bpe-out/
