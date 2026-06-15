@@ -4,6 +4,10 @@
 
 Здесь вы соберёте **библиотеку из пяти переиспользуемых prompt-шаблонов** на реальном API: **extractor** (structured output), **classifier** (few-shot + enum), **reasoner** (chain-of-thought), **summarizer** (роль + формат) и **safe-answerer** (delimit-and-trust против инъекций). Плюс сквозное демо **prompt caching**. На выходе — пять работающих функций в вашем ноутбуке, которые можно носить из проекта в проект.
 
+## Два пути — выберите по тому, какой ключ у вас есть
+- **`notebook.ipynb`** — канон на **Anthropic SDK** (как лекция). Полное покрытие, включая structured output и демо prompt caching. Нужен платный ключ Anthropic.
+- **`notebook-hf.ipynb`** — **бесплатная альтернатива** на открытой модели через Hugging Face Inference. Нужен только бесплатный HF-токен. Роли/few-shot/CoT/инъекции переносятся один-в-один; structured output показан честным путём «JSON → валидация → репромпт» (у открытых моделей он не гарантирован провайдером), а prompt caching — фича провайдера, его разбирает основной ноутбук. Берите этот путь, если нет ключа Anthropic.
+
 ## Что нужно сделать до начала
 - **Нужен API-ключ Anthropic.** Без ключа ничего не запустится — модуль весь про вызовы API.
 - Ноутбук написан на **Anthropic SDK** (как лекция). Если у вас только OpenAI — адаптируйте шаблоны по двойникам из лекции 6.4.
@@ -13,7 +17,8 @@
 ## Файлы в папке
 | Файл | Зачем |
 | --- | --- |
-| `notebook.ipynb` | Рабочий ноутбук (`Run all` проходит целиком): пять prompt-шаблонов + демо prompt caching. Активность — в финальной секции «Задачи». Каждая ячейка печатает результат. |
+| `notebook.ipynb` | Рабочий ноутбук на Anthropic SDK (`Run all` проходит целиком): пять prompt-шаблонов + демо prompt caching. Активность — в финальной секции «Задачи». Каждая ячейка печатает результат. |
+| `notebook-hf.ipynb` | Бесплатная альтернатива на открытой модели через HF Inference (`Run all` проходит на бесплатном HF-токене): те же приёмы, structured output через «JSON + валидация + репромпт». |
 | `.env.example` | Шаблон для ключа. Реальный `.env` не коммитим. |
 
 ## Что в ноутбуке (всё рабочее, `Run all` проходит целиком)
@@ -31,6 +36,12 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-6-5-prompt-engineering/notebook.ipynb)
 
 Нажмите бейдж. Добавьте ключ через `Secrets` (имя `ANTHROPIC_API_KEY`), затем `Runtime → Run all`. GPU не нужен. Первая ячейка подтянет ключ из Colab Secrets автоматически.
+
+**Бесплатный путь без ключа Anthropic** (открытая модель через HF):
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-6-5-prompt-engineering/notebook-hf.ipynb)
+
+Тот же бейдж, но для `notebook-hf.ipynb`. Добавьте бесплатный HF-токен через `Secrets` (имя `HF_TOKEN`), затем `Run all`. Токен заводится на huggingface.co → Settings → Access Tokens.
 
 ### Вариант B — Kaggle
 1. Зайдите на [kaggle.com](https://www.kaggle.com/) → `Create → New Notebook`.
