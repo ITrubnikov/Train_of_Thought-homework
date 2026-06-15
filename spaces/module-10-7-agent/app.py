@@ -31,7 +31,7 @@ def c_to_f(celsius: float) -> float:
 
 
 # Открытая модель через HF Inference. Ключ берётся из секрета HF_TOKEN автоматически.
-model = InferenceClientModel(model_id="Qwen/Qwen2.5-Coder-32B-Instruct")
+model = InferenceClientModel(model_id="Qwen/Qwen2.5-Coder-7B-Instruct")  # дешёвая coder-модель — экономит кредиты
 agent = CodeAgent(tools=[word_count, c_to_f], model=model)
 
 GradioUI(agent).launch()

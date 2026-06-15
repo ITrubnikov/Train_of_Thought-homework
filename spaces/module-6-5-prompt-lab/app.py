@@ -19,7 +19,7 @@ from huggingface_hub import InferenceClient
 from pydantic import BaseModel, ValidationError
 
 # --- Клиент: открытая модель, provider="auto" сам выберет доступного провайдера ---
-DEFAULT_MODEL = "Qwen/Qwen2.5-72B-Instruct"
+DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # небольшая дешёвая модель — экономит бесплатные кредиты HF
 TOKEN = os.getenv("HF_TOKEN")
 client = InferenceClient(provider="auto", api_key=TOKEN) if TOKEN else None
 

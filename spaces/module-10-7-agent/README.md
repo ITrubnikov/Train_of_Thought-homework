@@ -53,4 +53,4 @@ def reverse(text: str) -> str:
 - **Free Space засыпает** — первый ответ после простоя идёт дольше; каждый вызов тратит бесплатные кредиты HF Inference.
 
 ## Модель
-По умолчанию `Qwen/Qwen2.5-Coder-32B-Instruct` (CodeAgent пишет код, coder-модель подходит). Если недоступна/кончились кредиты — впишите другую из [hf.co/models?inference=warm](https://huggingface.co/models?inference=warm) в `InferenceClientModel(model_id=...)`.
+По умолчанию `Qwen/Qwen2.5-Coder-7B-Instruct` — дешёвая coder-модель (CodeAgent пишет код, coder-модель подходит), экономит бесплатные кредиты HF. На 7B агент изредка ошибается в коде на шаге и сам пересобирает — для учебного демо нормально; хотите умнее — поставьте `Qwen/Qwen2.5-Coder-32B-Instruct`. Если модель недоступна/кончились кредиты — впишите другую из [hf.co/models?inference=warm](https://huggingface.co/models?inference=warm) в `InferenceClientModel(model_id=...)`.
