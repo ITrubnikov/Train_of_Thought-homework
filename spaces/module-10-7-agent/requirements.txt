@@ -1,0 +1,2 @@
+smolagents
+gradio>=5,<6
