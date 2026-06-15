@@ -8,6 +8,8 @@
 - **`notebook.ipynb`** — канон на **Anthropic SDK** (как лекция). Полное покрытие, включая structured output и демо prompt caching. Нужен платный ключ Anthropic.
 - **`notebook-hf.ipynb`** — **бесплатная альтернатива** на открытой модели через Hugging Face Inference. Нужен только бесплатный HF-токен. Роли/few-shot/CoT/инъекции переносятся один-в-один; structured output показан честным путём «JSON → валидация → репромпт» (у открытых моделей он не гарантирован провайдером), а prompt caching — фича провайдера, его разбирает основной ноутбук. Берите этот путь, если нет ключа Anthropic.
 
+Хотите кликать приёмы в браузере без кода — рядом есть интерактивная **HF Space-заготовка** [`spaces/module-6-5-prompt-lab`](https://github.com/ITrubnikov/Train_of_Thought-homework/tree/main/spaces/module-6-5-prompt-lab): Gradio-чат с редактируемым system-промптом, пресетами приёмов и вкладкой structured output. Разворачивается через Duplicate Space + секрет `HF_TOKEN`.
+
 ## Что нужно сделать до начала
 - **Нужен API-ключ Anthropic.** Без ключа ничего не запустится — модуль весь про вызовы API.
 - Ноутбук написан на **Anthropic SDK** (как лекция). Если у вас только OpenAI — адаптируйте шаблоны по двойникам из лекции 6.4.
