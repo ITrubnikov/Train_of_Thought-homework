@@ -1,0 +1,6 @@
+qubi-lora/
+qubi-lora-adapter/
+qubi-qlora/
+qubi-qlora-adapter/
+.ipynb_checkpoints/
+__pycache__/
