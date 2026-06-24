@@ -21,6 +21,7 @@
 | Файл | Зачем |
 | --- | --- |
 | [`notebook.ipynb`](notebook.ipynb) | Основной ноутбук. LoRA на 0.5B + честный before/after + QLoRA (4-bit) на 3B. Запускается целиком (`Run all`). |
+| [`use-adapter.ipynb`](use-adapter.ipynb) | Бонус: как пользоваться выложенным адаптером — грузим базу + адаптер с HF Hub, сравниваем с голой базой. **Работает локально без GPU.** |
 | [`build_dataset.py`](build_dataset.py) | Генератор датасета про «Кьюби» (knowledge + rehearsal). Поменяйте факты — получите свой урок. |
 | [`data/qubi_train.jsonl`](data/qubi_train.jsonl) | Обучающая выборка: 80 примеров про Кьюби + 28 rehearsal (общие вопросы против забывания). |
 | [`data/qubi_eval.jsonl`](data/qubi_eval.jsonl) | Held-out: перефразировки (проверка обобщения) + контрольные общие вопросы (проверка «не сломалось»). |
