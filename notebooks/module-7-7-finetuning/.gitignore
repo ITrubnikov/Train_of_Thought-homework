@@ -1,6 +1,9 @@
+qubi-*/
 qubi-lora/
 qubi-lora-adapter/
 qubi-qlora/
 qubi-qlora-adapter/
+qubi-merged/
+*.gguf
 .ipynb_checkpoints/
 __pycache__/
