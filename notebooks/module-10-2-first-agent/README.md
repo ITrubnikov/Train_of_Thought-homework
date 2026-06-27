@@ -1,71 +1,50 @@
-# Модуль 10.2 — Первый агент на smolagents, пошагово
+# Модуль 10.2 — Клонируй живого агента: Space с котиком
 
-Домашка к [Модулю 10.2: Первый агент на smolagents, пошагово](https://itrubnikov.github.io/Train_of_Thought/docs/modules/10-2-first-agent/).
+Домашка к [Модулю 10.2: Клонируй живого агента](https://itrubnikov.github.io/Train_of_Thought/docs/modules/10-2-first-agent/).
 
-В модуле 10.1 вы собрали петлю ReAct руками: системный промпт, стоп-токен, парсинг JSON, ручной вызов тула. Здесь та же петля прячется за одним методом `CodeAgent.run()`, а ваша работа сводится к двум вещам: написать **свои** `@tool` и собрать агента под **свою** задачу. Артефакт — работающий smolagents-агент с вашими инструментами и вывод build-twice: что вы потеряли в контроле и что выиграли в удобстве по сравнению с 10.1.
+Здесь **нет ноутбука** — и это намеренно. Агент это целостная система (модель + инструменты + петля + чат + хостинг), и щёлкать её по ячейкам неинтересно. Вместо этого вы **клонируете готовый живой Space**, включаете генерацию котика, добавляете свой инструмент — и получаете работающего агента по ссылке. Внутри это smolagents `CodeAgent` — та же петля, что вы писали руками в [модуле 10.1](https://github.com/ITrubnikov/Train_of_Thought-homework/tree/main/notebooks/module-10-1-agent-by-hand), только за одним методом `run()`.
 
 ## Что нужно до начала
 
-- **Бесплатный HF-токен** (huggingface.co → Settings → Access Tokens, роль `read`). Без него модель не позвать.
-- Знакомство с ручной петлёй из [модуля 10.1](https://github.com/ITrubnikov/Train_of_Thought-homework/tree/main/notebooks/module-10-1-agent-by-hand) — на неё мы будем опираться в сравнении.
-- Зависимости (`smolagents`) ставятся первой ячейкой ноутбука.
+- Аккаунт **Hugging Face**.
+- **Бесплатный HF-токен** (huggingface.co → Settings → Access Tokens, роль `read`). Он же `HF_TOKEN`, что в модулях 10 и 10.7.
+- Ничего ставить локально не нужно — всё происходит в браузере, в вашем Space.
 
-## Файлы
+## Артефакт
 
-| Файл | Зачем |
-| --- | --- |
-| `notebook.ipynb` | Пошагово: свой `@tool` (типы + docstring с `Args:`) → `CodeAgent` + `InferenceClientModel` → `agent.run(...)` → сравнение с петлёй из 10.1. `Run all` проходит (нужен `HF_TOKEN`). |
+Не файл, а **ваша живая копия агента по URL**: Space, который по запросу «нарисуй котика» рисует картинку и умеет ваш собственный `@tool`.
 
-## Что вы делаете в ноутбуке
+## Шаги
 
-1. Пишете свой `@tool`: типы аргументов + docstring с секцией `Args:`. Это **контракт** — именно из него smolagents строит схему инструмента для модели. Нет docstring — модель не знает, что тул умеет.
-2. Собираете `CodeAgent(tools=[...], model=InferenceClientModel(...))` и запускаете `agent.run(...)`. Модель сама решает, какой тул и с какими аргументами позвать.
-3. **Build-twice:** сравниваете с ручной петлёй из 10.1. То, что вы писали сами (петля, стоп-токен, парсинг действия, подача `Observation` обратно), теперь делает `run()` за вас. Считаете, сколько строк ушло и что вы отдали фреймворку из контроля.
-
-Ключевая мысль: дефолтный агент с `tools=[final_answer]` по умолчанию **не умеет ничего** — это пустой каркас. Вся работа — дописать инструменты в этот список под свою задачу.
-
-## Как запустить ноутбук
-
-### A. Colab (проще всего)
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ITrubnikov/Train_of_Thought-homework/blob/main/notebooks/module-10-2-first-agent/notebook.ipynb)
-
-Добавьте `HF_TOKEN` через `Secrets` (значок ключа слева), затем `Runtime → Run all`. GPU не нужен.
-
-### B. Kaggle
-
-`File → Import Notebook → URL`:
-
-```
-https://raw.githubusercontent.com/ITrubnikov/Train_of_Thought-homework/main/notebooks/module-10-2-first-agent/notebook.ipynb
-```
-
-Затем `Add-ons → Secrets` добавьте `HF_TOKEN` и `Run all`.
-
-### C. Локально
-
-```bash
-pip install smolagents
-export HF_TOKEN=hf_...
-jupyter lab notebook.ipynb
-```
+1. **Duplicate.** Откройте шаблон [`agents-course/First_agent_template`](https://huggingface.co/spaces/agents-course/First_agent_template) → меню **⋮ → Duplicate this Space**. Получите личную копию со своим URL.
+2. **Секрет `HF_TOKEN`.** В вашем Space: **Settings → Variables and secrets → New secret**, имя `HF_TOKEN`, значение — ваш токен. Без него агент молчит.
+3. **Включите котика.** Вкладка **Files** → `app.py` (правка прямо в браузере). Найдите строку сборки агента и добавьте `image_generation_tool` в список инструментов:
+   ```python
+   # было:
+   agent = CodeAgent(tools=[final_answer], model=model, ...)
+   # стало:
+   agent = CodeAgent(tools=[final_answer, image_generation_tool], model=model, ...)
+   ```
+   Сохраните — Space пересоберётся сам.
+4. **Поговорите с агентом.** Откройте чат Space → «нарисуй котика» (или *generate an image of a cat*). Агент сам вызовет `image_generation_tool` и вернёт картинку.
+5. **Сделайте своим.** Допишите в `app.py` собственный `@tool` (типы аргументов + docstring с секцией `Args:` — это контракт, из него строится схема для модели) и впишите его в `tools=[...]`. Спросите агента так, чтобы он позвал ваш инструмент.
 
 ## ДЗ — самопроверка
 
 Полное задание — в [лекции 10.2](https://itrubnikov.github.io/Train_of_Thought/docs/modules/10-2-first-agent/). Кратко:
 
-- [ ] Написаны 2-3 **своих** `@tool` под свою задачу (не SQL-агент из ДЗ1 модуля 10, не пример из лекции).
-- [ ] Собран `CodeAgent` с вашими инструментами, прогнаны 2-3 осмысленных запроса; в логах видно, какой тул агент позвал.
-- [ ] Сделан build-twice-вывод: сколько строк было в 10.1 против здесь, что потеряли в контроле, что выиграли в удобстве.
+- [ ] Ваша копия Space открывается по URL, секрет `HF_TOKEN` положен.
+- [ ] «нарисуй котика» → в чате появилась картинка (значит `image_generation_tool` в `tools=[...]`).
+- [ ] Добавлен **свой** `@tool`, и видно, что агент его вызывает.
 
-Артефакт — публичная ссылка на ноутбук, в чат как `[Модуль 10.2, ДЗ 1] {ссылка}`.
+Артефакт — ссылка на ваш Space (можно со скриншотом котика), в чат как `[Модуль 10.2, ДЗ 1] {ссылка на Space}`.
 
 ## Подводные камни
 
-- **`@tool` без docstring** не виден модели. smolagents строит схему инструмента из типов аргументов и docstring с секцией `Args:`. Нет описания — модель не понимает, когда и как звать тул.
-- **Пустой список инструментов → агент ничего не умеет.** Дефолтный `tools=[final_answer]` (как в шаблоне `First_agent_template`) — это пустой каркас. Пока вы не дописали свои тулы, агент не делает ничего полезного.
-- **Version drift: `HfApiModel` vs `InferenceClientModel`.** В живом `First_agent_template/app.py` модель создаётся как `HfApiModel`, а в тексте туториала местами встречается `InferenceClientModel` — типовая засада версий smolagents. Мы используем `InferenceClientModel`; если копируете чужой пример и видите `ImportError`/`AttributeError` на классе модели — это первое, что нужно проверить.
+- **Нет секрета `HF_TOKEN` → агент молчит.** Сборка прошла, но модель не вызвать. Ключ всегда секретом (Settings → Secrets), никогда в `app.py` — публичный Space показывает код всем.
+- **Котик не рисуется → `image_generation_tool` не в `tools=[...]`.** В шаблоне инструмент объявлен, но по умолчанию агенту не выдан (`tools=[final_answer]`). Список `tools=[...]` — это «руки» агента; пока инструмента там нет, агент про него не знает.
+- **Version drift: `HfApiModel` vs `InferenceClientModel`.** В живом `app.py` модель может создаваться как `HfApiModel`, а в тексте туториала — как `InferenceClientModel`. Это одно и то же, класс переименовали между версиями smolagents. Видите `ImportError`/`AttributeError` на имени класса — сверьте с версией пакета в Space.
 
-## Деплой
+## Деплой своего Space с нуля
 
-Превратить вашего агента в живой веб-чат на HF Spaces (duplicate Space, секрет `HF_TOKEN`, Gradio, `sdk_version`) — отдельная тема: [Модуль 10.7. Деплой агента](https://itrubnikov.github.io/Train_of_Thought/docs/modules/10-7-deploy-agent/).
+Здесь вы **клонировали** готовый Space. Как собрать **свой с нуля** из трёх файлов (`app.py`, `requirements.txt`, `README.md`) и пройти грабли продакшена (`sdk_version`, засыпание, кредиты, безопасность исполнения кода) — в [Модуле 10.7. Деплой агента](https://itrubnikov.github.io/Train_of_Thought/docs/modules/10-7-deploy-agent/).
