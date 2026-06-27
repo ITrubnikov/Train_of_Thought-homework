@@ -37,14 +37,14 @@
 
 ### Вариант C — локально (для семинара)
 ```bash
-pip install huggingface_hub python-dotenv
+pip install huggingface_hub python-dotenv openai
 cp .env.example .env          # затем впишите HF_TOKEN в .env
 jupyter lab notebook.ipynb    # ноутбук сам подхватит .env через load_dotenv()
 ```
 
 Все нужные переменные — в [`.env.example`](.env.example): `HF_TOKEN` (обязательно), `HF_MODEL` (опц.) и закомментированные `MINIMAX_*` на случай смены провайдера. Файл `.env` в `.gitignore` — реальные ключи не уедут в репозиторий.
 
-MiniMax (OpenAI-совместимый `api.minimax.io/v1`, модель `MiniMax-M3`) — альтернатива HF Inference: тот же `chat.completions.create(..., stop=[...])`, переключается сменой одной строки клиента (задача 3).
+**Переключиться на MiniMax** (OpenAI-совместимый `api.minimax.io/v1`, модель `MiniMax-M3`) — код менять не нужно: впишите `MINIMAX_API_KEY` в `.env` и перезапустите. Ячейка клиента сама увидит ключ и переключится (напечатает «Провайдер: MiniMax»); уберёте ключ — вернётся на HF. Это задача 3 и наглядная демонстрация единого интерфейса `chat.completions.create`.
 
 ## ДЗ — самопроверка
 - [ ] Ноутбук прогнан; петля дошла до `Final Answer:` минимум за два шага (добавьте второй тул и вопрос, требующий двух действий).
