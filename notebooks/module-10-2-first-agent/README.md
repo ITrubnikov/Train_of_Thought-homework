@@ -16,7 +16,7 @@
 
 ## Шаги
 
-1. **Duplicate.** Откройте шаблон [`agents-course/First_agent_template`](https://huggingface.co/spaces/agents-course/First_agent_template) → меню **⋮ → Duplicate this Space**. Получите личную копию со своим URL.
+1. **Duplicate.** Откройте наш шаблон [`HOhus/First_agent_template_10_2_v1`](https://huggingface.co/spaces/HOhus/First_agent_template_10_2_v1) → меню **⋮ → Duplicate this Space**. Получите личную копию со своим URL. (Это форк официального First_agent_template, починенный под актуальный smolagents — оригинал падает при обновлении версии, см. «Подводные камни».)
 2. **Секрет `HF_TOKEN`.** В вашем Space: **Settings → Variables and secrets → New secret**, имя `HF_TOKEN`, значение — ваш токен. Без него агент молчит.
 3. **Включите котика.** Вкладка **Files** → `app.py` (правка прямо в браузере). Найдите строку сборки агента и добавьте `image_generation_tool` в список инструментов:
    ```python
@@ -43,7 +43,7 @@
 
 - **Нет секрета `HF_TOKEN` → агент молчит.** Сборка прошла, но модель не вызвать. Ключ всегда секретом (Settings → Secrets), никогда в `app.py` — публичный Space показывает код всем.
 - **Котик не рисуется → `image_generation_tool` не в `tools=[...]`.** В шаблоне инструмент объявлен, но по умолчанию агенту не выдан (`tools=[final_answer]`). Список `tools=[...]` — это «руки» агента; пока инструмента там нет, агент про него не знает.
-- **Version drift: `HfApiModel` vs `InferenceClientModel`.** В живом `app.py` модель может создаваться как `HfApiModel`, а в тексте туториала — как `InferenceClientModel`. Это одно и то же, класс переименовали между версиями smolagents. Видите `ImportError`/`AttributeError` на имени класса — сверьте с версией пакета в Space.
+- **Почему наш форк, а не официальный шаблон.** Официальный `agents-course/First_agent_template` пинит старую `smolagents==1.13.0` и при обновлении падает каскадом: `HfApiModel` → `InferenceClientModel`, у `CodeAgent` убрали `grammar`, старый `prompts.yaml` несовместим (нет секции `final_answer`, `AssertionError`). Наш форк это уже починил (актуальный smolagents, без `grammar`, дефолтные промпты, `GradioUI` из smolagents) — поэтому клонируете его. Будете апгрейдить чужой старый Space сами — готовьтесь к этим граблям на стыках API.
 
 ## Деплой своего Space с нуля
 
