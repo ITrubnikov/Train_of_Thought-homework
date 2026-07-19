@@ -1,2 +1,4 @@
-smolagents
+smolagents==1.26.0
+openai>=1.0
+requests>=2
 gradio>=5,<6
