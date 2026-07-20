@@ -274,12 +274,15 @@ def respond(message, history, cogno_token):
                 content=f"Подключено к жителю Cognopolis «{who}». Модель: {model_name}.",
             ))
             yield history, world_state_text()
-        # Страховка: память агента копится через прогоны (reset_agent_memory=False
-        # ради непрерывности чата) — не даём ей расти бесконечно.
-        if len(agent.memory.steps) > 40:
-            agent.memory.reset()
         generation = _world_generation
-        for msg in stream_to_gradio(agent, task=task, reset_agent_memory=False):
+        # Память агента сбрасываем ПЕРЕД каждым прогоном (reset_agent_memory=True).
+        # Каждая задача самодостаточна: task_seed + свежие get_character/get_map
+        # несут всё состояние живого мира заново. А НЕсброс копил контекст через
+        # прогоны до сотен тысяч токенов, и слабая локальная 7B тонула в своей
+        # истории — на первом же шаге фабриковала final_answer «уже сдал», не
+        # сделав ни одного вызова инструмента. Непрерывность здесь даёт сам
+        # ПЕРСИСТЕНТНЫЙ мир (житель стоит, где закончил), а не память агента.
+        for msg in stream_to_gradio(agent, task=task, reset_agent_memory=True):
             if _world_generation != generation:
                 # «Сбросить» нажали во время прогона: останавливаем стрим и
                 # оставляем чат чистым, как и обещает кнопка.

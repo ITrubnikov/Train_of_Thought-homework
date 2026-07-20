@@ -328,7 +328,14 @@ def respond(message, history, cogno_token):
         ))
         yield history, world_state_text()
         return
-    task = helpers.facts_seed(char, gmap, text) + "\n\nЗадача: " + text
+    task = helpers.facts_seed(char, gmap, text)
+    # Подсказка-маршрут — подпорка под СЛАБУЮ локальную модель (см. helpers.route_hint):
+    # порядок действий несёт умение, а «куда шагать» подсказываем, иначе qwen-7B путает
+    # координаты и рубит впустую. Не для разведки (scout только читает, маршрут ей ни к
+    # чему). Выключается WEAK_MODEL_ROUTE=0 — тогда навигацию ведёт реактивный цикл умения.
+    if not _is_scout_task(text) and os.getenv("WEAK_MODEL_ROUTE", "1") != "0":
+        task += "\n" + helpers.route_hint(char, gmap, text)
+    task += "\n\nЗадача: " + text
 
     # Живой агентный цикл think -> act -> observe; шаги стримятся в чат.
     try:
@@ -344,12 +351,16 @@ def respond(message, history, cogno_token):
                          f"Модель: {model_name}. Умений в библиотеке: {n_skills}."),
             ))
             yield history, world_state_text()
-        # Страховка: память агента копится через прогоны (reset_agent_memory=False
-        # ради непрерывности чата) — не даём ей расти бесконечно.
-        if len(agent.memory.steps) > 40:
-            agent.memory.reset()
         generation = _world_generation
-        for msg in stream_to_gradio(agent, task=task, reset_agent_memory=False):
+        # Память агента сбрасываем ПЕРЕД каждым прогоном (reset_agent_memory=True).
+        # Каждая задача самодостаточна: facts_seed + свежие get_character/get_map
+        # несут всё состояние живого мира заново. А НЕсброс копил контекст через
+        # прогоны до сотен тысяч токенов, и слабая локальная 7B тонула в своей
+        # истории — на первом же шаге фабриковала final_answer «уже сдал», не
+        # сделав ни одного вызова инструмента (и ловила «no JSON blob» на раздутом
+        # контексте). Непрерывность здесь даёт сам ПЕРСИСТЕНТНЫЙ мир (житель стоит,
+        # где закончил), а не память агента; чат в панели и так сохраняется отдельно.
+        for msg in stream_to_gradio(agent, task=task, reset_agent_memory=True):
             if _world_generation != generation:
                 # «Сбросить» нажали во время прогона: останавливаем стрим и
                 # оставляем чат чистым, как и обещает кнопка.
