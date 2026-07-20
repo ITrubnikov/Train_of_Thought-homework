@@ -38,6 +38,24 @@ from mcp import StdioServerParameters
 from smolagents import OpenAIServerModel, ToolCallingAgent, ToolCollection
 from smolagents.gradio_ui import stream_to_gradio
 
+def _load_dotenv() -> None:
+    """Подхватить .env рядом с app.py (шаблон — .env-example): токен и переопределения
+    LM_MODEL_ID / LM_BASE / COGNOPOLIS_BASE_URL. Настоящие переменные окружения ВАЖНЕЕ —
+    .env заполняет только пропуски. Тот же загрузчик встроен в cognopolis_mcp_server.py,
+    так что подпроцесс сервера видит тот же .env сам."""
+    env_file = Path(__file__).with_name(".env")
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+
+
+_load_dotenv()
+
 # LM Studio: дефолтный адрес его OpenAI-совместимого сервера.
 LM_BASE = os.getenv("LM_BASE", "http://localhost:1234/v1")
 
@@ -401,6 +419,8 @@ def build_demo():
             type="password",
             label="Под-токен персонажа Cognopolis (обязательно)",
             placeholder="Character.token вашего жителя",
+            value=os.getenv("COGNOPOLIS_TOKEN", ""),   # предзаполняется из .env / окружения
+            info="Можно не вписывать руками: скопируйте .env-example в .env и впишите токен там.",
         )
         with gr.Row():
             with gr.Column(scale=3):
