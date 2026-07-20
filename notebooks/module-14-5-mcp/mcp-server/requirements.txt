@@ -1,0 +1,4 @@
+# Зависимости MCP-серверов модуля 14.5. Нужен Python 3.10+ — требование fastmcp
+# (системный python3 на macOS — 3.9; запасной путь: uv venv --python 3.11).
+fastmcp>=3     # FastMCP: @mcp.tool / @mcp.resource / mcp.run() — сервер и клиент MCP
+requests>=2    # HTTP-вызовы живого API Cognopolis (cognopolis_mcp_server.py)
