@@ -6,12 +6,33 @@
 # берёт из окружения COGNOPOLIS_TOKEN — клиент передаёт его при запуске подпроцесса
 # (stdio), в сам протокол токен не попадает.
 #
-# Запуск: COGNOPOLIS_TOKEN=<под-токен> python cognopolis_mcp_server.py
+# Запуск: python cognopolis_mcp_server.py
+# Токен: скопируйте .env-example в .env и впишите COGNOPOLIS_TOKEN — либо передайте
+# переменной окружения (настоящее окружение важнее .env).
 import os
+from pathlib import Path
 from typing import Literal
 
 import requests
 from fastmcp import FastMCP
+
+
+def _load_dotenv() -> None:
+    """Подхватить .env рядом с файлом (шаблон — .env-example). Настоящие переменные
+    окружения ВАЖНЕЕ: .env заполняет только пропуски — так клиент (ноутбук, Claude
+    Code) может передать токен через env подпроцесса, не трогая файл."""
+    env_file = Path(__file__).with_name(".env")
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+
+
+_load_dotenv()
 
 BASE_URL = os.environ.get("COGNOPOLIS_BASE_URL", "https://kindomklaster.com").rstrip("/")
 TOKEN = os.environ.get("COGNOPOLIS_TOKEN", "")
