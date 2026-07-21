@@ -100,7 +100,7 @@
 Intensive](https://www.kaggle.com/learn-guide/5-day-genai) от Google
 под Apache 2.0 (см. шапки ноутбуков). Ноутбуки из `module-10-smolagents/` —
 форки [HF Agents Course](https://huggingface.co/learn/agents-course)
-под Apache 2.0. Всё остальное — наше под MIT.
+под Apache 2.0. Всё остальное — наше под Apache-2.0.
 
 **Параллельный учебный канон:** мы проходим [HF Agents Course Unit 2](https://huggingface.co/learn/agents-course/unit2)
 (smolagents + LlamaIndex + LangGraph) параллельно нашим модулям 10, 14, 15.
@@ -133,7 +133,7 @@ Intensive](https://www.kaggle.com/learn-guide/5-day-genai) от Google
 
 ## Лицензия
 
-Код в этом репозитории — под MIT (см. [LICENSE](./LICENSE)). Ноутбуки
+Код в этом репозитории — под Apache-2.0 (см. [LICENSE](./LICENSE)). Ноутбуки
 из `notebooks/kaggle-5day-genai/` — под их оригинальной Apache 2.0
 лицензией от Google, копия лицензии есть в первой ячейке каждого
 ноутбука.

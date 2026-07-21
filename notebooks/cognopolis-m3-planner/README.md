@@ -95,5 +95,5 @@ jupyter notebook notebook.ipynb
 
 ## Лицензия
 
-MIT — см. [LICENSE](../../LICENSE) в корне репозитория. Материалы игры Cognopolis используются
+Apache-2.0 — см. [LICENSE](../../LICENSE) в корне репозитория. Материалы игры Cognopolis используются
 в учебных целях курса.

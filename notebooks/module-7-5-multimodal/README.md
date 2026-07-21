@@ -72,4 +72,4 @@ jupyter lab notebook.ipynb
 [Модуль 8. Что такое агент](https://itrubnikov.github.io/Train_of_Thought/docs/modules/08-what-is-agent/) — модель начинает не только смотреть, но и действовать; vision станет одним из её инструментов (computer use).
 
 ## Лицензия
-MIT (см. `LICENSE` в корне репозитория).
+Apache-2.0 (см. `LICENSE` в корне репозитория).

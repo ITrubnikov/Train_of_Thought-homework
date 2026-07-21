@@ -104,5 +104,5 @@ jupyter notebook notebook.ipynb
 
 ## Лицензия
 
-MIT (см. [LICENSE](../../LICENSE) в корне репо). Корпус Пушкина —
+Apache-2.0 (см. [LICENSE](../../LICENSE) в корне репо). Корпус Пушкина —
 public domain (умер в 1837).

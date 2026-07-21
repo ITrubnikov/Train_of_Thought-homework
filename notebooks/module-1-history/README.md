@@ -77,4 +77,4 @@ python perceptron.py
 
 ## Лицензия
 
-MIT (см. [LICENSE](../../LICENSE) в корне репо).
+Apache-2.0 (см. [LICENSE](../../LICENSE) в корне репо).

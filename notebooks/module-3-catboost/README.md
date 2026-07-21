@@ -127,6 +127,6 @@ GPU не нужен — на CPU всё обучается за 20—40 секу
 
 ## Лицензия
 
-Код — MIT (см. [LICENSE](../../LICENSE) в корне репо). Датасет —
+Код — Apache-2.0 (см. [LICENSE](../../LICENSE) в корне репо). Датасет —
 Ames Housing (Dean De Cock, 2011), public domain, опубликован на
 Kaggle и в OpenML.
