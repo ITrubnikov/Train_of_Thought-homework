@@ -38,6 +38,13 @@ from mcp import StdioServerParameters
 from smolagents import OpenAIServerModel, ToolCallingAgent, ToolCollection
 from smolagents.gradio_ui import stream_to_gradio
 
+# Подпорки под СЛАБУЮ локальную модель (затравка фактов, маршрут, факт-чек) —
+# те же, что в шаблонах 11.5 и 13.6, честно вынесены отдельным файлом. Это НЕ
+# игровые инструменты (их агент по-прежнему берёт только из MCP-сервера), а
+# внешняя обвязка мозга; на сильной модели helpers.py можно выкинуть.
+import helpers
+
+
 def _load_dotenv() -> None:
     """Подхватить .env рядом с app.py (шаблон — .env-example): токен и переопределения
     LM_MODEL_ID / LM_BASE / COGNOPOLIS_BASE_URL. Настоящие переменные окружения ВАЖНЕЕ —
@@ -79,10 +86,13 @@ _world_generation = 0
 
 NO_LMSTUDIO_MESSAGE = (
     "Агент пока спит: локальный запуск ждёт LM Studio (это модель-мозг), а "
-    f"сервер {LM_BASE} не отвечает (или в нём не загружена разговорная модель).\n\n"
-    "Откройте LM Studio, во вкладке Developer нажмите Start server и загрузите "
-    "инструкт-модель с поддержкой tool use (в каталоге помечены молотком; "
-    "например Qwen2.5-7B-Instruct), затем напишите снова."
+    f"сервер {LM_BASE} не отвечает.\n\n"
+    "Откройте LM Studio, во вкладке Developer нажмите **Start server** (или в "
+    "терминале `lms server start`). Загружать модель заранее не обязательно — "
+    "выбранную из списка LM Studio подтянет на лету; но лучше брать инструкт-"
+    "модель с поддержкой tool use (в каталоге помечены молотком; например "
+    "Qwen2.5-7B-Instruct). Затем нажмите «↻ Обновить» над списком моделей, "
+    "выберите мозг и напишите снова."
 )
 
 NO_CHARACTER_TOKEN_MESSAGE = (
@@ -94,65 +104,133 @@ NO_CHARACTER_TOKEN_MESSAGE = (
     "переменную окружения и дальше — только на сам API игры."
 )
 
-# Инструкции агенту — правила живого мира, выверенные в ноутбуке домашки 14.5
-# (Блок 5). Заметьте: про сами инструменты тут ни слова лишнего — их описания
-# агент получает из каталога сервера, вместе с самими инструментами.
+# Инструкции агенту — МЕХАНИКА живого мира. Заметьте: про сами инструменты тут
+# ни слова лишнего (их описания агент берёт из каталога MCP-сервера) — здесь
+# только правила мира и как считать шаги, потому что именно на навигации слабая
+# локальная 7B срывается. Модель из 11.5/13.6, та же кухня.
 LIVE_INSTRUCTIONS = (
-    "Ты управляешь жителем поселения Cognopolis через инструменты MCP-сервера. "
-    "Правила живого мира: после каждого действия кулдаун около 1 секунды - получив ошибку "
-    "character_on_cooldown, просто повтори тот же вызов. Дом - клетка (0, 0): шаг на неё "
-    "сам сдаёт рюкзак на склад (в ответе move это поле banked), отдельного deposit нет - "
-    "не ищи его. Карта - инструмент get_map: тайл tree это дерево (wood), rock - камень (stone). "
-    "Начни с get_character и get_map, чтобы понять, где ты и что вокруг; "
-    "каждый move делай с целью, не блуждай."
+    "Ты управляешь РЕАЛЬНЫМ жителем поселения Cognopolis на сетке 7x7 (x и y от 0 "
+    "до 6) через инструменты MCP-сервера. Мир персистентный: житель стоит там, где "
+    "закончил прошлый раз, а НЕ обязательно дома.\n\n"
+    "КАК УСТРОЕН МИР:\n"
+    "- get_character — прочитать своё РЕАЛЬНОЕ [x, y], рюкзак (inventory) и склад "
+    "(stored). Не предполагай, что ты дома [0, 0].\n"
+    "- get_map — тайлы: content 'tree' даёт wood, 'rock' даёт stone; на тайлы с "
+    "врагами (goblin, wolf, ogre) не ходи — это драка.\n"
+    "- move меняет ОДНУ координату: east = x+1, west = x-1, south = y+1, north = "
+    "y-1. Чтобы дойти до [tx, ty]: если твой x больше tx — иди west, меньше — east; "
+    "если твой y больше ty — north, меньше — south. После КАЖДОГО move читай новый "
+    "[x, y] из ответа и решай следующий шаг по нему, не считай весь путь наперёд. "
+    "Ошибка at_map_edge — шаг был НАРУЖУ карты, возьми противоположную сторону.\n"
+    "- gather добывает ресурс с тайла, на котором стоишь РОВНО; добыча падает в "
+    "рюкзак (inventory) — это ещё НЕ склад. Ошибка no_resource_here — ты не на "
+    "клетке ресурса, сначала встань на неё.\n"
+    "- Отдельного deposit НЕТ: дом [0, 0] сам разгружает рюкзак на склад (в ответе "
+    "move появляется banked). Пока ты не на [0, 0], добытое НЕ сдано.\n"
+    "- Ошибка инструмента — не провал, а подсказка: читай code и message. "
+    "character_on_cooldown значит «занят долю секунды» — повтори тот же вызов.\n\n"
+    "ПОРЯДОК. Если в задаче дан «Рекомендуемый маршрут» — иди строго по нему, шаг "
+    "за шагом, сверяя [x, y] в ответе каждого move; не блуждай и не выдумывай свой "
+    "путь. Если маршрута нет — начни с get_character и get_map, найди цель по карте "
+    "и иди к ней. Заявляй задачу выполненной ТОЛЬКО после того, как get_character "
+    "покажет результат в складе (stored)."
 )
 
 
-def _detect_lm_model():
-    """Спросить у LM Studio, какая разговорная модель доступна.
+# Значение выпадающего списка «выбрать модель самому не хочу — реши сам».
+AUTO_MODEL = ""
 
-    Возвращает id модели или None, если сервер молчит. Переопределить выбор
-    можно переменной окружения LM_MODEL_ID.
 
-    Гоча автодетекта: /v1/models при включённом JIT loading отдаёт все
-    СКАЧАННЫЕ модели, а не загруженную в память — первым может оказаться
-    что угодно. Поэтому сперва спрашиваем расширенный /api/v0/models и берём
-    модель со state=loaded (текстовые llm приоритетнее мультимодальных vlm),
-    и только для старых LM Studio без /api/v0 падаем на грубую эвристику."""
-    forced = os.getenv("LM_MODEL_ID")
-    if forced:
-        return forced
+def _lm_models():
+    """Список разговорных моделей LM Studio: [(id, state, type), ...].
+
+    Пустой список = сервер молчит (не запущен Start server). Спрашиваем
+    расширенный /api/v0/models — он различает state (loaded/not-loaded) и type
+    (llm / vlm / embeddings); берём только разговорные (llm, vlm), эмбеддеры
+    выкидываем. На старом LM Studio без /api/v0 падаем на /v1/models, где ни
+    state, ни типа нет (тогда state=type=None, и в UI просто нет пометок).
+
+    Гоча: /v1/models при включённом JIT loading отдаёт ВСЕ скачанные модели, а
+    не загруженную в память — поэтому для «какая сейчас в памяти» нужен именно
+    /api/v0/models со state=loaded (см. _pick_default)."""
     root = LM_BASE.rsplit("/v1", 1)[0]
     try:
         r = requests.get(f"{root}/api/v0/models", timeout=2)
         r.raise_for_status()
-        models = r.json().get("data", [])
-        for want_type in ("llm", "vlm"):
-            loaded = [m["id"] for m in models
-                      if m.get("state") == "loaded" and m.get("type") == want_type]
-            if loaded:
-                return loaded[0]
+        return [(m["id"], m.get("state"), m.get("type"))
+                for m in r.json().get("data", [])
+                if m.get("type") in ("llm", "vlm")]
     except Exception:  # noqa: BLE001 — старый LM Studio без /api/v0, идём дальше
         pass
     try:
         r = requests.get(f"{LM_BASE}/models", timeout=2)
         r.raise_for_status()
-        ids = [item["id"] for item in r.json().get("data", [])]
-        chat_ids = [i for i in ids if "embed" not in i.lower()]
-        return chat_ids[0] if chat_ids else None
+        return [(item["id"], None, None) for item in r.json().get("data", [])
+                if "embed" not in item["id"].lower()]
     except Exception:  # noqa: BLE001 — любой сбой значит «сервера нет»
-        return None
+        return []
 
 
-def _make_model():
+def _pick_default(models):
+    """Автовыбор модели из списка _lm_models: приоритет — загруженная llm.
+
+    Переопределяется переменной окружения LM_MODEL_ID. Дальше: загруженная в
+    память llm > загруженная vlm > первая доступная (её LM Studio подгрузит на
+    лету, JIT). None — если список пуст (сервер молчит)."""
+    forced = os.getenv("LM_MODEL_ID")
+    if forced:
+        return forced
+    for want_type in ("llm", "vlm"):
+        for mid, state, mtype in models:
+            if state == "loaded" and mtype == want_type:
+                return mid
+    return models[0][0] if models else None
+
+
+def _detect_lm_model():
+    """Автовыбор модели (обёртка над _lm_models + _pick_default)."""
+    return _pick_default(_lm_models())
+
+
+def _resolve_model(model_choice, models):
+    """Какую модель реально отдать агенту по выбору из выпадающего списка.
+
+    Пусто/AUTO или устаревший id (модель уже удалили/выгрузили из каталога) →
+    автовыбор. Иначе — ровно то, что выбрал пользователь (LM Studio подгрузит
+    её на лету, если она ещё не в памяти)."""
+    chosen = (model_choice or "").strip()
+    available = {mid for mid, _, _ in models}
+    return chosen if chosen in available else _pick_default(models)
+
+
+def _make_model(model_id):
     """Модель-мозг из LM Studio (одна строка лекции «какой модели отдать tools»)."""
     return OpenAIServerModel(
-        model_id=_detect_lm_model(),
+        model_id=model_id,
         api_base=LM_BASE,
         api_key="lm-studio",  # LM Studio ключ не проверяет, но клиенту нужна заглушка
         max_tokens=2096,
         temperature=0.2,  # локальные 4-8B путаются на 0.5 — держим их на рельсах
     )
+
+
+def model_choices(selected=None):
+    """Пункты выпадающего списка моделей: Автовыбор + все чат-модели LM Studio.
+
+    Метка показывает состояние: ● загружена в память, ○ скачана но не загружена
+    (LM Studio подгрузит её на лету при первом сообщении), плюс тип (llm/vlm).
+    Значение пункта — id модели (или AUTO для автовыбора). Возвращает gr.update,
+    чтобы обновлять список и при загрузке страницы, и по кнопке «Обновить»;
+    текущий выбор сохраняем, если он ещё доступен."""
+    models = _lm_models()
+    choices = [("Автовыбор (загруженная, иначе первая доступная)", AUTO_MODEL)]
+    for mid, state, mtype in models:
+        mark = "● " if state == "loaded" else ("○ " if state == "not-loaded" else "")
+        suffix = f"  · {mtype}" if mtype else ""
+        choices.append((f"{mark}{mid}{suffix}", mid))
+    values = {v for _, v in choices}
+    keep = selected if selected in values else AUTO_MODEL
+    return gr.update(choices=choices, value=keep)
 
 
 def _probe_character(token: str) -> dict:
@@ -171,6 +249,22 @@ def _probe_character(token: str) -> dict:
         raise RuntimeError(f"{err.get('code', 'http_error')}: "
                            f"{err.get('message', r.text[:200])}")
     return r.json()
+
+
+def _probe_map() -> dict:
+    """Прямая проба карты живого мира — для затравки под слабую модель.
+
+    Как и _probe_character, это НЕ инструмент агента: свои инструменты агент
+    берёт из MCP-сервера. Это внешняя разведка живого API (get_map публичный,
+    без токена), чтобы app.py собрал facts_seed/route_hint ДО прогона — иначе
+    слабая 7B пропускает get_map и уходит вслепую. При любом сбое возвращаем
+    пустую карту: затравка честно скажет «ресурса не видно», а не уронит чат."""
+    try:
+        r = requests.get(BASE_URL + "/map", timeout=15)
+        r.raise_for_status()
+        return r.json()
+    except Exception:  # noqa: BLE001 — нет карты значит нет затравки, не беда
+        return {"tiles": []}
 
 
 def _set_cogno_snapshot(character: dict):
@@ -214,26 +308,33 @@ def _close_mcp():
     _tool_collection = None
 
 
-def _ensure_agent(cogno_token: str):
-    """Собрать (или переиспользовать) агента под токен + модель LM Studio.
+def _ensure_agent(cogno_token: str, model_id: str):
+    """Собрать (или переиспользовать) агента под токен + выбранную модель LM Studio.
 
-    Смена токена или модели закрывает старое MCP-соединение и открывает
-    новое: COGNOPOLIS_TOKEN сервер читает из окружения один раз, на старте
-    подпроцесса, поэтому «поменять токен» = «перезапустить сервер».
-    Список tools агент в любом случае получает из каталога сервера — в этом
-    файле их определений нет."""
+    Ключ включает id модели: выбрали в выпадающем списке другой мозг — ключ
+    сменился, и агент пересобирается при следующем сообщении (живое демо
+    «переключи модель» без рестарта). Но MCP-соединение зависит ТОЛЬКО от
+    токена: COGNOPOLIS_TOKEN сервер читает из окружения один раз, на старте
+    подпроцесса. Поэтому смена одной лишь модели переиспользует уже открытый
+    каталог tools и лишь заново оборачивает его агентом; перезапускаем
+    подпроцесс discovery только при смене токена (или если соединения ещё нет).
+    Список tools агент в любом случае берёт из каталога сервера — в этом файле
+    их определений нет."""
     global _agent, _agent_key
-    model_hint = _detect_lm_model()
-    key = (cogno_token, model_hint)
+    key = (cogno_token, model_id)
     if _agent is not None and _agent_key == key and _tool_collection is not None:
         return _agent
-    _close_mcp()
-    tc = _open_mcp(cogno_token)
+    # Токен сменился (или соединения нет) — переоткрываем подпроцесс сервера.
+    # Сменилась ТОЛЬКО модель при живом соединении — каталог оставляем как есть.
+    token_changed = _agent_key is None or _agent_key[0] != cogno_token
+    if _tool_collection is None or token_changed:
+        _close_mcp()
+        _open_mcp(cogno_token)
     # max_steps с запасом: на реальной игре маршрут длинный, а кулдаун съедает
     # шаги на повторы — это часть цикла, а не сбой.
     _agent = ToolCallingAgent(
-        tools=[*tc.tools],
-        model=_make_model(),
+        tools=[*_tool_collection.tools],
+        model=_make_model(model_id),
         max_steps=40,
         instructions=LIVE_INSTRUCTIONS,
     )
@@ -286,7 +387,7 @@ def store_message(message):
     return message, ""
 
 
-def respond(message, history, cogno_token):
+def respond(message, history, cogno_token, model_choice):
     """Обработать сообщение: проверить токен/LM Studio, запустить агента на игре."""
     text = (message or "").strip()
     cogno_token = (cogno_token or "").strip()
@@ -299,10 +400,15 @@ def respond(message, history, cogno_token):
     yield history, world_state_text(), mcp_tools_text()
 
     # Мозг агента: без LM Studio не падаем, а объясняем, чего не хватает.
-    if _detect_lm_model() is None:
+    # Пустой список моделей = сервер не отвечает (не нажат Start server).
+    models = _lm_models()
+    if not models:
         history.append(gr.ChatMessage(role="assistant", content=NO_LMSTUDIO_MESSAGE))
         yield history, world_state_text(), mcp_tools_text()
         return
+    # Какую модель отдать агенту: выбор из выпадающего списка (или автовыбор
+    # загруженной, если выбран «Автовыбор» или модель из списка исчезла).
+    model_id = _resolve_model(model_choice, models)
 
     # Игра только онлайн: без под-токена не работаем и не подменяем мок-лесом.
     if not cogno_token:
@@ -327,10 +433,22 @@ def respond(message, history, cogno_token):
     _set_cogno_snapshot(char)
     yield history, world_state_text(), mcp_tools_text()
 
+    # Затравка под СЛАБУЮ локальную модель (тот же приём, что в 11.5/13.6):
+    # внешней пробой берём карту и кладём прямо в задачу факты о мире + готовый
+    # маршрут. Это НЕ инструменты агента — их он по-прежнему берёт из MCP; это
+    # разведка мира, чтобы 7B не пропускала get_map и не блуждала к краю.
+    # WEAK_MODEL_ROUTE=0 убирает маршрут — на модели посильнее навигацию она
+    # ведёт сама по фактам затравки и правилам мира из инструкций.
+    gmap = _probe_map()
+    task = helpers.facts_seed(char, gmap, text)
+    if os.getenv("WEAK_MODEL_ROUTE", "1") != "0":
+        task += "\n" + helpers.route_hint(char, gmap, text)
+    task += "\n\nЗадача: " + text
+
     # Живой агентный цикл think -> act -> observe; шаги стримятся в чат.
     try:
         fresh = _agent is None or _tool_collection is None
-        agent = _ensure_agent(cogno_token)
+        agent = _ensure_agent(cogno_token, model_id)
         if fresh:
             model_name = getattr(agent.model, "model_id", "?")
             who = char.get("name") or char.get("id", "?")
@@ -347,7 +465,7 @@ def respond(message, history, cogno_token):
         # накопленная через прогоны история топит слабую локальную 7B — она
         # фабрикует final_answer, не сделав ни одного вызова. Непрерывность даёт
         # сам ПЕРСИСТЕНТНЫЙ мир (житель стоит, где закончил), а не память агента.
-        for msg in stream_to_gradio(agent, task=text, reset_agent_memory=True):
+        for msg in stream_to_gradio(agent, task=task, reset_agent_memory=True):
             if _world_generation != generation:
                 # «Сбросить» нажали во время прогона: останавливаем стрим и
                 # оставляем чат чистым, как и обещает кнопка.
@@ -356,17 +474,13 @@ def respond(message, history, cogno_token):
             history.append(msg)
             yield history, world_state_text(), mcp_tools_text()
         # Правда из игры после прогона: слабая модель склонна объявить успех,
-        # не вернувшись на склад, — показываем реальное состояние жителя.
+        # не вернувшись на склад. Сверяем СОСТОЯНИЕМ, а не словами — дельта
+        # склада (stored) до/после, как в 11.5/13.6: char был снят ДО прогона.
         try:
             final_char = _probe_character(cogno_token)
             _set_cogno_snapshot(final_char)
-            facts = (
-                f"Проверка по факту (get_character): позиция "
-                f"[{final_char.get('x')}, {final_char.get('y')}], "
-                f"рюкзак {dict(final_char.get('inventory') or {}) or '{}'}, "
-                f"склад {dict(final_char.get('stored') or {}) or '{}'}."
-            )
-            history.append(gr.ChatMessage(role="assistant", content=facts))
+            history.append(gr.ChatMessage(
+                role="assistant", content=helpers.fact_check(char, final_char, text)))
             yield history, world_state_text(), mcp_tools_text()
         except Exception:  # noqa: BLE001 — панель просто останется прежней
             pass
@@ -410,10 +524,12 @@ def build_demo():
             "(ToolCollection.from_mcp) — в проектах 11.5 и 13.6 те же move, "
             "gather, get_map, get_character были классами в файле проекта. "
             "Агент ходит на **реальный API игры** https://kindomklaster.com и "
-            "ведёт вашего настоящего жителя. Впишите под-токен персонажа ниже "
-            "и попросите, например: «Добудь одно дерево (wood) и вернись домой "
-            "на (0, 0)».\n\n"
-            f"*Модель (мозг): локальный LM Studio ({LM_BASE}), подхватывается сама.*"
+            "ведёт вашего настоящего жителя. Впишите под-токен персонажа ниже, "
+            "выберите модель-мозг и попросите, например: «Добудь одно дерево "
+            "(wood) и вернись домой на (0, 0)».\n\n"
+            f"*Модель (мозг): локальный LM Studio ({LM_BASE}). Выберите её в "
+            "списке ниже — «Автовыбор» берёт загруженную в память, а если "
+            "ничего не загружено — первую скачанную (LM Studio подтянет её).*"
         )
         token_input = gr.Textbox(
             type="password",
@@ -422,6 +538,17 @@ def build_demo():
             value=os.getenv("COGNOPOLIS_TOKEN", ""),   # предзаполняется из .env / окружения
             info="Можно не вписывать руками: скопируйте .env-example в .env и впишите токен там.",
         )
+        with gr.Row():
+            model_dropdown = gr.Dropdown(
+                # choices/value наполняются на загрузке страницы через demo.load
+                # (сервер LM Studio может быть ещё не запущен в момент импорта).
+                choices=[("Автовыбор (загруженная, иначе первая доступная)", AUTO_MODEL)],
+                value=AUTO_MODEL,
+                label="Модель-мозг (LM Studio)",
+                info="● загружена в память · ○ подгрузится на лету при первом сообщении",
+                scale=5,
+            )
+            refresh_btn = gr.Button("↻ Обновить", scale=1)
         with gr.Row():
             with gr.Column(scale=3):
                 chatbot = gr.Chatbot(label="Лесоруб через MCP", type="messages", scale=1)
@@ -451,15 +578,18 @@ def build_demo():
                 reset_btn = gr.Button("Сбросить")
 
         stored_message = gr.State("")
+        respond_inputs = [stored_message, chatbot, token_input, model_dropdown]
         text_input.submit(
             store_message, [text_input], [stored_message, text_input]
-        ).then(respond, [stored_message, chatbot, token_input],
-               [chatbot, state_box, tools_box])
+        ).then(respond, respond_inputs, [chatbot, state_box, tools_box])
         send_btn.click(
             store_message, [text_input], [stored_message, text_input]
-        ).then(respond, [stored_message, chatbot, token_input],
-               [chatbot, state_box, tools_box])
+        ).then(respond, respond_inputs, [chatbot, state_box, tools_box])
         reset_btn.click(reset_click, None, [chatbot, state_box, tools_box])
+        # Список моделей — живой: наполняем на загрузке страницы и по кнопке
+        # «Обновить» (запустили Start server / загрузили другую модель — видно сразу).
+        refresh_btn.click(model_choices, model_dropdown, model_dropdown)
+        demo.load(model_choices, model_dropdown, model_dropdown)
     return demo
 
 
