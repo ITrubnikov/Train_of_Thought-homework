@@ -1,0 +1,732 @@
+"""Лесоруб на рельсах — LangGraph-агент с permission gate на живой игре Cognopolis.
+
+Тот же лесоруб, что в 11.5 (smolagents), 14.5 (MCP) и 14 (LlamaIndex), — но
+петля агента впервые нарисована явным графом, и в неё врезаны ВОРОТА:
+
+- петля ReAct как граф: узел assistant (модель с инструментами) + узел tools
+  (исполнитель) + ребро tools -> assistant, замыкающее цикл;
+- свой стрелочник вместо готового tools_condition: третий маршрут «в ворота»,
+  когда модель просит инструмент из GATE_TOOLS (по умолчанию — gather);
+- узел gate: interrupt() останавливает граф ПЕРЕД рубкой, вопрос падает в чат,
+  и процесс ждёт вашего «да»/«нет» — Command(resume=...) доигрывает узел;
+- checkpointer + thread_id: пауза — это сохранение, а не блокировка; нить
+  диалога и есть память агента.
+
+Пуант лекции 15 живьём: маршрут задаёте вы, модель работает на своих участках.
+Самое дорогое решение — рубить живое дерево в персистентном мире — процесс
+не принимает сам: он замирает и спрашивает человека. Это ровно permission
+gate из Claude Code (модуль 11), собранный вашими руками из interrupt.
+
+Мозг — локальная модель из LM Studio через ChatOpenAI (без ключей). Какую
+модель взять, приложение спрашивает у LM Studio само; дропдаун «Модель-мозг»
+позволяет выбрать руками, «↻ Обновить» перечитывает список без перезапуска.
+
+Устройство:
+- cognopolis_tools.py — клиент живого API + 4 инструмента-действия (голые
+  функции: паспорт из имени/docstring/type hints собирает LangChain);
+- helpers.py         — подпорки под слабую модель (затравка, маршрут,
+  факт-чек), к LangGraph отношения не имеют;
+- app.py             — граф, ворота, чат на Gradio (этот файл).
+
+Интерфейс поднимается даже без бэкенда: граф и модель создаются лениво.
+Без LM Studio живёт keyless-часть — панель «Рельсы агента»: схема графа
+выводится из кода, модели для этого не нужно (урок модуля 15).
+"""
+
+import asyncio
+import json
+import os
+import threading
+from pathlib import Path
+from typing import Annotated, Optional
+
+import gradio as gr
+import requests
+from typing_extensions import TypedDict
+
+from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+from langgraph.types import Command, interrupt
+
+import cognopolis_tools
+# Подпорки слабой модели (затравка/маршрут/факт-чек) — НЕ детали LangGraph;
+# на сильной модели helpers.py можно выкинуть.
+import helpers
+
+
+def _load_dotenv() -> None:
+    """Прочитать .env рядом с app.py (шаблон — .env-example).
+
+    Настоящие переменные окружения важнее: .env заполняет только пропуски."""
+    env_file = Path(__file__).with_name(".env")
+    if not env_file.is_file():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_dotenv()
+
+# LM Studio: дефолтный адрес его OpenAI-совместимого сервера.
+LM_BASE = os.getenv("LM_BASE", "http://localhost:1234/v1")
+# Адрес игры фиксирован на прод; для своего Cognopolis-сервера — .env.
+BASE_URL = os.getenv("COGNOPOLIS_BASE_URL", cognopolis_tools.DEFAULT_BASE_URL).rstrip("/")
+# Какие инструменты идут через ворота. Пустая строка = ворот нет (эксперимент
+# лекции: выключите и почувствуйте разницу — агент рубит без спроса).
+GATE_TOOLS = {t.strip() for t in os.getenv("GATE_TOOLS", "gather").split(",") if t.strip()}
+
+# --- Состояние процесса (ленивое; интерфейс живёт и без бэкенда) ------------
+_graph = None
+_graph_key = None          # чем определён текущий граф: (токен, модель)
+_thread_seq = 0            # счётчик нитей: дефолт — новая нить на каждый прогон
+_thread_id = None          # активная нить (продолжается при AGENT_MEMORY=1 и на resume)
+_pending_gate = None       # вопрос ворот, ждущий ответа человека (None = не ждём)
+_cogno_snapshot = None     # последний известный character из живого API
+_last_task_char = None     # снимок ДО прогона — для факт-чека после resume
+
+# Поколение: каждый сброс увеличивает счётчик, и бегущий прогон агента
+# замечает это между событиями и останавливается (см. respond).
+_world_generation = 0
+
+NO_LMSTUDIO_MESSAGE = (
+    "Агент пока спит: локальный запуск ждёт LM Studio (это модель-мозг), а "
+    f"сервер {LM_BASE} не отвечает (или в нём нет ни одной модели).\n\n"
+    "Откройте LM Studio, во вкладке Developer нажмите Start server (или "
+    "`lms server start` в терминале) и скачайте инструкт-модель с поддержкой "
+    "tool use (в каталоге помечены молотком; например Qwen2.5-7B-Instruct), "
+    "затем нажмите «↻ Обновить» у дропдауна модели и напишите снова.\n\n"
+    "Пока модели нет, работает keyless-часть шаблона: панель «Рельсы агента» — "
+    "схема графа выводится из кода без единого LLM-вызова."
+)
+
+NO_CHARACTER_TOKEN_MESSAGE = (
+    "Нужен под-токен персонажа Cognopolis: этот агент играет только в живую "
+    "игру, мок-мира тут нет.\n\n"
+    "Впишите под-токен своего жителя (Character.token) в поле «Под-токен "
+    "персонажа Cognopolis» вверху и отправьте команду снова. Токен остаётся "
+    "в этом локальном процессе и уходит только на сам API игры."
+)
+
+# Системные инструкции — правила МИРА и порядок работы. Контракт инструментов
+# сюда не переписываем: их «паспорта» модель читает сама. Написаны под слабую
+# локальную модель (LM Studio): сильной они не мешают, слабую держат на рельсах.
+LIVE_INSTRUCTIONS = (
+    "Ты управляешь РЕАЛЬНЫМ жителем поселения Cognopolis на сетке 7x7 (x и y "
+    "от 0 до 6). Мир персистентный: житель стоит там, где закончил прошлый "
+    "раз, а НЕ обязательно дома.\n"
+    "Твои инструменты: move, gather, get_character, get_map. Действуй только "
+    "через них, по одному вызову за раз.\n"
+    "Порядок работы над задачей в мире:\n"
+    "1) СНАЧАЛА вызови get_character и прочитай своё РЕАЛЬНОЕ [x, y] — не "
+    "предполагай, что ты дома [0, 0].\n"
+    "2) Вызови get_map. Тайлы с content 'tree' дают wood, 'rock' — stone. "
+    "Выбери ближайший нужный тайл; на тайлы с врагами (goblin, wolf, ogre) "
+    "НЕ ходи — сборщику там делать нечего, обходи их по другой оси.\n"
+    "3) Иди к цели [tx, ty], меняя ОДНУ координату за один move. Правило "
+    "направлений: если твой x больше tx — иди west (x уменьшается); если "
+    "меньше — east; если твой y больше ty — north (y уменьшается); если "
+    "меньше — south (east = x+1, west = x-1, south = y+1, north = y-1). "
+    "После КАЖДОГО move читай новый [x, y] из ответа: он должен приближаться "
+    "к цели. Если пришла ошибка at_map_edge — ты выбрал сторону НАРУЖУ карты, "
+    "выбери противоположную.\n"
+    "4) Когда стоишь РОВНО на тайле ресурса — вызови gather. Ресурс попадёт в "
+    "рюкзак (inventory), это ещё НЕ склад.\n"
+    "5) Чтобы «сдать на склад», ОБЯЗАТЕЛЬНО вернись на дом [0, 0] тем же "
+    "правилом — только дом разгружает рюкзак на склад (в ответе move появится "
+    "banked). Отдельного deposit нет; пока ты не на [0, 0], ресурс не сдан.\n"
+    "Если в сообщении дан «Рекомендуемый маршрут» — выполняй ВСЕ его шаги по "
+    "порядку до конца, включая возврат домой; по одному вызову за раз.\n"
+    "ВОРОТА: перед рубкой (gather) процесс может остановиться и спросить "
+    "разрешения у человека — это нормально, просто жди. Если человек рубку "
+    "ЗАПРЕТИЛ (в ответе инструмента ошибка denied_by_human) — НЕ повторяй тот "
+    "же вызов; объясни, что рубка запрещена, и спроси, что делать дальше.\n"
+    "ПРОВЕРКА перед финальным ответом: вызови get_character. Задача «добыть и "
+    "сдать» выполнена ТОЛЬКО если нужный ресурс лежит в stored (склад), а в "
+    "inventory (рюкзак) его нет, и твоя позиция [0, 0]. Если ресурс всё ещё в "
+    "inventory — ты НЕ сдал: иди на [0, 0]. Не объявляй успех без проверки.\n"
+    "Ошибка от инструмента — не провал, а подсказка: прочитай её code и "
+    "message и продолжай. character_on_cooldown значит «занят долю секунды» — "
+    "повтори тот же вызов."
+)
+
+
+# --- Селектор моделей LM Studio (тот же приём, что в 14 и 14.5) --------------
+
+AUTO_MODEL = ""  # значение пункта «Автовыбор» в дропдауне
+
+
+def _lm_models():
+    """Список моделей LM Studio: [(id, state, type), ...].
+
+    Гоча автодетекта: /v1/models при включённом JIT loading отдаёт все
+    СКАЧАННЫЕ модели, а не загруженную в память — первым может оказаться
+    что угодно. Поэтому сперва спрашиваем расширенный /api/v0/models, где у
+    модели есть state (loaded/not-loaded) и type (llm/vlm/embeddings), и
+    только для старых LM Studio без /api/v0 падаем на грубую эвристику."""
+    root = LM_BASE.rsplit("/v1", 1)[0]
+    try:
+        r = requests.get(f"{root}/api/v0/models", timeout=2)
+        r.raise_for_status()
+        return [(m["id"], m.get("state"), m.get("type"))
+                for m in r.json().get("data", [])
+                if m.get("type") in ("llm", "vlm")]
+    except Exception:  # noqa: BLE001 — старый LM Studio без /api/v0, идём дальше
+        pass
+    try:
+        r = requests.get(f"{LM_BASE}/models", timeout=2)
+        r.raise_for_status()
+        return [(item["id"], None, None) for item in r.json().get("data", [])
+                if "embed" not in item["id"].lower()]
+    except Exception:  # noqa: BLE001 — любой сбой значит «сервера нет»
+        return []
+
+
+def _pick_default(models):
+    """Автовыбор: env LM_MODEL_ID > загруженная llm > загруженная vlm > первая."""
+    forced = os.getenv("LM_MODEL_ID")
+    if forced:
+        return forced
+    for want_type in ("llm", "vlm"):
+        loaded = [mid for mid, state, mtype in models
+                  if state == "loaded" and mtype == want_type]
+        if loaded:
+            return loaded[0]
+    return models[0][0] if models else None
+
+
+def _resolve_model(model_choice, models):
+    """Выбор из дропдауна; пусто/Автовыбор/пропавший id → автовыбор."""
+    ids = [mid for mid, _, _ in models]
+    if model_choice and model_choice != AUTO_MODEL and model_choice in ids:
+        return model_choice
+    return _pick_default(models)
+
+
+def model_choices(selected=None):
+    """Наполнить дропдаун: ● — загружена в память, ○ — подгрузится на лету."""
+    models = _lm_models()
+    choices = [("Автовыбор (загруженная, иначе первая доступная)", AUTO_MODEL)]
+    for mid, state, mtype in models:
+        mark = "● " if state == "loaded" else "○ "
+        label = mark + mid + (f" · {mtype}" if mtype else "")
+        choices.append((label, mid))
+    keep = selected if selected in [v for _, v in choices] else AUTO_MODEL
+    return gr.update(choices=choices, value=keep)
+
+
+def _make_llm(model_id):
+    """Мозг из LM Studio — ChatOpenAI, та же строка, что в Блоке 4 ноутбука.
+
+    Модели нужен нативный tool use (в каталоге LM Studio — значок-молоток):
+    петля агента держится на tool_calls в ответе. Модель без молотка будет
+    отвечать текстом — граф честно завершится без единого действия."""
+    return ChatOpenAI(
+        model=model_id,
+        base_url=LM_BASE,
+        api_key="lm-studio",  # LM Studio ключ не проверяет, но клиенту нужна заглушка
+        temperature=0.2,      # локальные 4-8B путаются на 0.5 — держим их на рельсах
+        max_completion_tokens=2096,
+        timeout=120,
+    )
+
+
+# --- Пробы живого API (для панели и затравки; НЕ инструменты агента) ---------
+
+def _probe_character(token: str) -> dict:
+    """Проверить под-токен и снять жителя ДО прогона — честная обучающая
+    ошибка сразу, а не падение в середине."""
+    r = requests.get(f"{BASE_URL}/character",
+                     headers={"Authorization": f"Bearer {token}"}, timeout=15)
+    if r.status_code >= 400:
+        try:
+            err = r.json().get("error", {})
+        except Exception:  # noqa: BLE001
+            err = {}
+        raise RuntimeError(f"{err.get('code', 'http_error')}: "
+                           f"{err.get('message', r.text[:200])}")
+    return r.json()
+
+
+def _probe_map() -> dict:
+    """Карта для затравки (публичный эндпоинт). Сбой не роняет чат."""
+    try:
+        r = requests.get(f"{BASE_URL}/map", timeout=15)
+        r.raise_for_status()
+        return r.json()
+    except Exception:  # noqa: BLE001
+        return {"tiles": []}
+
+
+def _set_cogno_snapshot(character: dict):
+    """Колбэк инструментов: запомнить последнего character для панели."""
+    global _cogno_snapshot
+    _cogno_snapshot = character
+
+
+# --- Граф: State, узлы, стрелочники, ворота -----------------------------------
+
+class AgentState(TypedDict):
+    """Память процесса. messages копит историю (reducer add_messages из
+    лекции), approved — решение ворот: каждое решение процесса — поле state."""
+
+    messages: Annotated[list[AnyMessage], add_messages]
+    approved: Optional[bool]
+
+
+def _build_graph(cogno_token: str, model_id: str):
+    """Собрать граф лесоруба: петля assistant/tools + ворота на interrupt.
+
+    Это Блок 6 ноутбука плюс врезка из лекции: свой стрелочник вместо
+    tools_condition добавляет третий маршрут — «в ворота», когда модель
+    просит инструмент из GATE_TOOLS."""
+    llm = _make_llm(model_id)
+    client = cognopolis_tools.CognopolisClient(BASE_URL, cogno_token)
+    tools = cognopolis_tools.build_world_tools(client, _set_cogno_snapshot)
+    llm_with_tools = llm.bind_tools(tools)
+    system = SystemMessage(content=LIVE_INSTRUCTIONS)
+
+    def assistant(state: AgentState):
+        return {"messages": [llm_with_tools.invoke([system] + state["messages"])]}
+
+    def route_after_assistant(state: AgentState) -> str:
+        """Свой стрелочник: как tools_condition, но с маршрутом «в ворота».
+
+        Читает решение МОДЕЛИ (tool_calls в последнем сообщении) — но сам
+        путь, как всегда в LangGraph, называет ваша функция."""
+        last = state["messages"][-1]
+        calls = getattr(last, "tool_calls", None) or []
+        if not calls:
+            return "end"
+        if GATE_TOOLS and any(tc["name"] in GATE_TOOLS for tc in calls):
+            return "gate"
+        return "tools"
+
+    def gate(state: AgentState):
+        """Ворота: interrupt ПЕРЕД необратимым действием.
+
+        Граф замирает, состояние уезжает в checkpointer, вопрос — человеку в
+        чат. Command(resume=True/False) доигрывает узел: да — вызовы едут в
+        tools как ни в чём не бывало; нет — каждый tool_call закрывается
+        честной ошибкой denied_by_human (протокол требует ответить на каждый
+        вызов), и слово снова у модели."""
+        last = state["messages"][-1]
+        asked = [tc["name"] for tc in last.tool_calls if tc["name"] in GATE_TOOLS]
+        char = _cogno_snapshot or {}
+        decision = interrupt({
+            "question": (f"Агент просит разрешения на «{', '.join(asked)}» "
+                         f"(житель на [{char.get('x', '?')}, {char.get('y', '?')}]). "
+                         "Разрешить? Ответьте в чате: да / нет."),
+        })
+        if bool(decision):
+            return {"approved": True}
+        refusal = json.dumps({"error": {
+            "code": "denied_by_human",
+            "message": "Человек запретил это действие. Не повторяй тот же вызов: "
+                       "объясни отказ и спроси, что делать дальше.",
+        }}, ensure_ascii=False)
+        return {"approved": False,
+                "messages": [ToolMessage(content=refusal, tool_call_id=tc["id"])
+                             for tc in last.tool_calls]}
+
+    def route_after_gate(state: AgentState) -> str:
+        return "tools" if state["approved"] else "assistant"
+
+    builder = StateGraph(AgentState)
+    builder.add_node("assistant", assistant)
+    builder.add_node("tools", ToolNode(tools))
+    builder.add_node("gate", gate)
+
+    builder.add_edge(START, "assistant")
+    builder.add_conditional_edges("assistant", route_after_assistant,
+                                  {"tools": "tools", "gate": "gate", "end": END})
+    builder.add_conditional_edges("gate", route_after_gate,
+                                  {"tools": "tools", "assistant": "assistant"})
+    builder.add_edge("tools", "assistant")   # ребро, замыкающее петлю
+
+    # Checkpointer обязателен: без него interrupt не работает вовсе —
+    # паузе некуда сохраниться (подводный камень лекции).
+    return builder.compile(checkpointer=InMemorySaver())
+
+
+def _ensure_graph(cogno_token: str, model_id: str):
+    """Собрать (или переиспользовать) граф под текущие токен+модель.
+
+    Смена токена или модели пересобирает граф — вместе с checkpointer-ом,
+    то есть все нити начинаются заново (это осознанно: чужие нити со старым
+    токеном продолжать нельзя)."""
+    global _graph, _graph_key
+    key = (cogno_token, model_id)
+    if _graph is None or _graph_key != key:
+        _graph = _build_graph(cogno_token, model_id)
+        _graph_key = key
+    return _graph
+
+
+def _next_thread() -> str:
+    """Новая нить процесса. Дефолт — нить на каждый прогон (истории прошлых
+    задач топят слабую 7B); AGENT_MEMORY=1 держит одну нить до «Сбросить»."""
+    global _thread_seq, _thread_id
+    if _thread_id is None or os.getenv("AGENT_MEMORY", "0") != "1":
+        _thread_seq += 1
+        _thread_id = f"chat-{_thread_seq}"
+    return _thread_id
+
+
+# --- Тексты боковых панелей ---------------------------------------------------
+
+def world_state_text():
+    """Снимок реального персонажа для боковой панели (последний известный)."""
+    return json.dumps(
+        _cogno_snapshot or {"note": "впишите под-токен и отправьте команду персонажу"},
+        ensure_ascii=False, indent=2,
+    )
+
+
+def rails_text():
+    """Схема графа для панели «Рельсы агента» — выводится ИЗ КОДА.
+
+    Keyless-часть шаблона: модель для этого не нужна (bind_tools не зовёт
+    сервер), в лекции это бонус «схему не рисуют руками»."""
+    try:
+        demo_graph = _build_graph("", "-")
+        return demo_graph.get_graph().draw_ascii()
+    except Exception as exc:  # noqa: BLE001 — панель не должна ронять интерфейс
+        return f"схема недоступна: {exc!r}"
+
+
+def agent_tools_text():
+    """Список инструментов агента + какие из них за воротами."""
+    client = cognopolis_tools.CognopolisClient(BASE_URL, "")
+    lines = []
+    for fn in cognopolis_tools.build_world_tools(client, lambda c: None):
+        first = " ".join((fn.__doc__ or "").split()).split(". ")[0].rstrip(".")
+        gate_mark = " · **за воротами**" if fn.__name__ in GATE_TOOLS else ""
+        lines.append(f"- `{fn.__name__}` — {first}.{gate_mark}")
+    if GATE_TOOLS:
+        lines.append("\nВорота: перед инструментами «за воротами» граф замирает "
+                     "(interrupt) и ждёт вашего «да»/«нет» в чате.")
+    else:
+        lines.append("\nВорота выключены (GATE_TOOLS пуст): агент действует без "
+                     "одобрения — сравните ощущения.")
+    return "\n".join(lines)
+
+
+# --- Сброс и ввод --------------------------------------------------------------
+
+def _do_reset():
+    """Очистить граф, нити и снимок панели; поколение растёт, чтобы
+    остановить бегущий прогон. Реальный мир не трогаем — он общий."""
+    global _graph, _graph_key, _thread_id, _pending_gate, _cogno_snapshot
+    global _world_generation, _last_task_char
+    _world_generation += 1
+    _graph = None
+    _graph_key = None
+    _thread_id = None
+    _pending_gate = None
+    _cogno_snapshot = None
+    _last_task_char = None
+
+
+def store_message(message):
+    """Сохранить текст из поля ввода и очистить поле (паттерн шаблона 10.2)."""
+    return message, ""
+
+
+def _trim(text: str, limit: int = 600) -> str:
+    text = str(text)
+    return text if len(text) <= limit else text[:limit] + f"… (+{len(text) - limit} символов)"
+
+
+def _is_yes(text: str) -> bool:
+    """Ответ человека воротам: «да» в любом бытовом виде."""
+    t = text.strip().lower()
+    return any(t.startswith(w) for w in ("да", "yes", "y", "разреш", "руби", "ок", "ok"))
+
+
+# --- Цикл агента ----------------------------------------------------------------
+
+async def _stream_graph(graph, payload, config, history):
+    """Прогнать граф до конца или до ворот, рисуя плашки в чат.
+
+    Возвращает ("done" | "paused" | "stopped", history). stream_mode="updates":
+    каждый элемент — {узел: его дельта}; пауза приходит ключом __interrupt__."""
+    global _pending_gate
+    generation = _world_generation
+    async for update in graph.astream(payload, config, stream_mode="updates"):
+        if _world_generation != generation:
+            return "stopped", history
+        for node, out in update.items():
+            if node == "__interrupt__":
+                # Ворота: граф уже сохранился в checkpointer и остановился.
+                question = out[0].value["question"]
+                _pending_gate = {"config": config}
+                history.append(gr.ChatMessage(
+                    role="assistant",
+                    content=f"**Процесс замер у ворот.** {question}",
+                    metadata={"title": "⏸ ворота (interrupt)"},
+                ))
+                return "paused", history
+            if node == "assistant":
+                msg = out["messages"][-1]
+                for tc in (getattr(msg, "tool_calls", None) or []):
+                    args = json.dumps(tc["args"], ensure_ascii=False)
+                    history.append(gr.ChatMessage(
+                        role="assistant",
+                        content=f"`{tc['name']}({args})`",
+                        metadata={"title": f"🔧 запрос: {tc['name']}"},
+                    ))
+                if msg.content and not (getattr(msg, "tool_calls", None) or []):
+                    history.append(gr.ChatMessage(role="assistant", content=msg.content))
+            elif node == "tools":
+                for msg in out["messages"]:
+                    history.append(gr.ChatMessage(
+                        role="assistant",
+                        content=f"```\n{_trim(msg.content)}\n```",
+                        metadata={"title": "↩ ответ инструмента"},
+                    ))
+            elif node == "gate" and out and out.get("approved") is False:
+                history.append(gr.ChatMessage(
+                    role="assistant",
+                    content="Человек запретил действие — вызовы закрыты ошибкой "
+                            "`denied_by_human`, слово снова у модели.",
+                    metadata={"title": "⛔ ворота: отказ"},
+                ))
+    return "done", history
+
+
+async def respond(message, history, cogno_token, model_choice):
+    """Обработать сообщение: гейты окружения → затравка → стрим графа.
+
+    Если процесс стоит у ворот (_pending_gate), сообщение человека — это
+    ответ воротам: Command(resume=да/нет) продолжает ту же нить с того же
+    места. Иначе — обычный новый прогон."""
+    global _pending_gate, _last_task_char
+    text = (message or "").strip()
+    cogno_token = (cogno_token or "").strip()
+
+    if not text:
+        yield history, world_state_text()
+        return
+
+    history = history + [gr.ChatMessage(role="user", content=text)]
+    yield history, world_state_text()
+
+    # Мозг: без LM Studio не падаем, а объясняем, чего не хватает.
+    # Все пробы — через to_thread: respond крутится на общем event loop
+    # Gradio, и голый requests заморозил бы весь интерфейс на свой timeout.
+    models = await asyncio.to_thread(_lm_models)
+    if not models and not os.getenv("LM_MODEL_ID"):
+        history.append(gr.ChatMessage(role="assistant", content=NO_LMSTUDIO_MESSAGE))
+        yield history, world_state_text()
+        return
+    model_id = _resolve_model(model_choice, models)
+
+    # Игра только онлайн: без под-токена не работаем и не подменяем мок-миром.
+    if not cogno_token:
+        history.append(gr.ChatMessage(role="assistant", content=NO_CHARACTER_TOKEN_MESSAGE))
+        yield history, world_state_text()
+        return
+
+    generation = _world_generation
+    try:
+        graph = _ensure_graph(cogno_token, model_id)
+
+        # --- Ответ воротам: продолжаем замершую нить, а не начинаем новую ---
+        if _pending_gate is not None:
+            config = _pending_gate["config"]
+            _pending_gate = None
+            decision = _is_yes(text)
+            history.append(gr.ChatMessage(
+                role="assistant",
+                content=("Ответ принят: **разрешаю** — `Command(resume=True)` "
+                         "доигрывает узел ворот, вызовы едут в tools."
+                         if decision else
+                         "Ответ принят: **запрещаю** — `Command(resume=False)` "
+                         "доигрывает узел ворот отказом."),
+                metadata={"title": "▶ resume"},
+            ))
+            yield history, world_state_text()
+            status, history = await _stream_graph(
+                graph, Command(resume=decision), config, history)
+            yield history, world_state_text()
+            if status == "done" and _last_task_char is not None:
+                # Факт-чек отложился на время паузы — теперь прогон закончен.
+                try:
+                    final_char = await asyncio.to_thread(_probe_character, cogno_token)
+                    if _world_generation != generation:
+                        return
+                    _set_cogno_snapshot(final_char)
+                    history.append(gr.ChatMessage(
+                        role="assistant",
+                        content=helpers.fact_check(_last_task_char["char"], final_char,
+                                                   _last_task_char["text"])))
+                    _last_task_char = None
+                    yield history, world_state_text()
+                except Exception:  # noqa: BLE001 — факт-чек не должен ронять чат
+                    pass
+            return
+
+        # --- Обычный прогон -------------------------------------------------
+        # Проба токена ДО прогона + материал для затравки (мир персистентный).
+        char = await asyncio.to_thread(_probe_character, cogno_token)
+        _set_cogno_snapshot(char)
+        yield history, world_state_text()
+
+        # Подпорки — только задачам-действиям: маршрутная подсказка командует
+        # «иди», и подмешанная к чистому вопросу она уводит модель действовать.
+        if helpers.is_world_task(text):
+            gmap = await asyncio.to_thread(_probe_map)
+            task = helpers.facts_seed(char, gmap, text)
+            if os.getenv("WEAK_MODEL_ROUTE", "1") != "0":
+                task += "\n" + helpers.route_hint(char, gmap, text)
+            task += "\n\nЗадача: " + text
+            _last_task_char = {"char": char, "text": text}
+        else:
+            task = text
+            _last_task_char = None
+
+        thread = _next_thread()
+        config = {"configurable": {"thread_id": thread}, "recursion_limit": 80}
+        history.append(gr.ChatMessage(
+            role="assistant",
+            content=(f"Нить процесса: `{thread}` · модель: {model_id}. "
+                     "Каждый шаг графа сохраняется в checkpointer — "
+                     "пауза у ворот переживёт что угодно."),
+            metadata={"title": "🧵 thread"},
+        ))
+        yield history, world_state_text()
+
+        status, history = await _stream_graph(
+            graph, {"messages": [HumanMessage(content=task)], "approved": None},
+            config, history)
+        yield history, world_state_text()
+
+        # Факт-чек: слова агента vs реальное состояние — только когда прогон
+        # дошёл до конца (у ворот проверять рано, мир ещё меняется).
+        if status == "done" and helpers.is_world_task(text):
+            try:
+                final_char = await asyncio.to_thread(_probe_character, cogno_token)
+                if _world_generation != generation:
+                    return
+                _set_cogno_snapshot(final_char)
+                history.append(gr.ChatMessage(
+                    role="assistant", content=helpers.fact_check(char, final_char, text)))
+                _last_task_char = None
+                yield history, world_state_text()
+            except Exception:  # noqa: BLE001 — факт-чек не должен ронять чат
+                pass
+    except Exception as exc:  # noqa: BLE001 — любую беду показываем в чате
+        if _world_generation != generation:
+            return
+        hint = (
+            "Частые причины: LM Studio выгрузил модель или сервер остановлен; "
+            "модель без поддержки tool use (в каталоге LM Studio ищите значок-"
+            "молоток) — петля агента без tool_calls не закрутится. "
+            "GraphRecursionError — прогон упёрся в лимит шагов: упростите "
+            "задачу или повторите. После правок нажмите «Сбросить»."
+        )
+        history.append(gr.ChatMessage(
+            role="assistant",
+            content=f"Агент упал с ошибкой: {exc!r}\n\n{hint}",
+        ))
+        yield history, world_state_text()
+
+
+def reset_click():
+    """Кнопка «Сбросить»: чистим чат, граф и нити (мир не трогаем)."""
+    _do_reset()
+    return [], world_state_text()
+
+
+# --- Gradio UI -------------------------------------------------------------------
+
+def build_demo():
+    """Собрать интерфейс (функция, а не код при импорте: `import app` из
+    тестов не должен тянуть ничего тяжёлого)."""
+    with gr.Blocks(title="Лесоруб на рельсах — LangGraph на живой игре",
+                   fill_height=True) as demo:
+        gr.Markdown(
+            "## Лесоруб на рельсах — LangGraph-агент с permission gate на живой игре Cognopolis\n"
+            "Петля агента нарисована явным графом (assistant → tools → assistant), "
+            "и в неё врезаны **ворота**: перед рубкой (`gather`) процесс замирает "
+            "через `interrupt` и ждёт вашего «да»/«нет» прямо в чате — как "
+            "permission gate в Claude Code. Агент ходит на **реальный API игры** "
+            "https://kindomklaster.com и ведёт вашего настоящего жителя.\n\n"
+            "Попросите «добудь одно дерево (wood) и сдай его на склад» — и на "
+            "рубке процесс остановится спросить вас. Ответьте «нет» — и "
+            "посмотрите, как модель переживает отказ.\n\n"
+            f"*Модель (мозг): локальный LM Studio ({LM_BASE}), выбирается ниже. "
+            "Панель «Рельсы агента» справа работает и без модели — схема графа "
+            "выводится из кода.*"
+        )
+        token_input = gr.Textbox(
+            type="password",
+            label="Под-токен персонажа Cognopolis (обязательно)",
+            placeholder="Character.token вашего жителя",
+            value=os.getenv("COGNOPOLIS_TOKEN", ""),
+            info="Можно не вписывать руками: скопируйте .env-example в .env и "
+                 "заполните COGNOPOLIS_TOKEN — поле предзаполнится само.",
+        )
+        with gr.Row():
+            model_dropdown = gr.Dropdown(
+                choices=[("Автовыбор (загруженная, иначе первая доступная)", AUTO_MODEL)],
+                value=AUTO_MODEL,
+                label="Модель-мозг (LM Studio)",
+                info="● загружена · ○ подгрузится на лету",
+                scale=5,
+            )
+            refresh_btn = gr.Button("↻ Обновить", scale=1)
+        with gr.Row():
+            with gr.Column(scale=3):
+                chatbot = gr.Chatbot(label="Лесоруб на рельсах",
+                                     type="messages", scale=1)
+                with gr.Row():
+                    text_input = gr.Textbox(
+                        lines=1,
+                        label="Сообщение агенту (или ответ воротам: да / нет)",
+                        placeholder="Добудь одно дерево (wood) и сдай его на склад",
+                        scale=5,
+                    )
+                    send_btn = gr.Button("Отправить", variant="primary", scale=1)
+            with gr.Column(scale=1):
+                state_box = gr.Code(
+                    # Именно функция, не вызов: callable Gradio перевычисляет
+                    # на каждую загрузку страницы.
+                    value=world_state_text,
+                    language="json",
+                    label="Персонаж (живой мир)",
+                )
+                gr.Markdown("**Рельсы агента** — схема графа, выведенная из "
+                            "кода (`draw_ascii`), без единого LLM-вызова:")
+                rails_box = gr.Code(value=rails_text, label="Схема процесса")
+                tools_box = gr.Markdown(value=agent_tools_text,
+                                        label="Инструменты агента", container=True)
+                reset_btn = gr.Button("Сбросить")
+
+        stored_message = gr.State("")
+        text_input.submit(
+            store_message, [text_input], [stored_message, text_input]
+        ).then(respond, [stored_message, chatbot, token_input, model_dropdown],
+               [chatbot, state_box])
+        send_btn.click(
+            store_message, [text_input], [stored_message, text_input]
+        ).then(respond, [stored_message, chatbot, token_input, model_dropdown],
+               [chatbot, state_box])
+        reset_btn.click(reset_click, None, [chatbot, state_box])
+        refresh_btn.click(model_choices, model_dropdown, model_dropdown)
+        demo.load(model_choices, model_dropdown, model_dropdown)
+    return demo
+
+
+if __name__ == "__main__":
+    # ssr_mode=False: экспериментальный SSR-режим Gradio 5 поднимает отдельный
+    # Node.js-сервер — лишняя точка отказа, а на HF Spaces он валит контейнер.
+    build_demo().launch(ssr_mode=False)
