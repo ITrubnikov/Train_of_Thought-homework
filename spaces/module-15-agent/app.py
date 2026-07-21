@@ -70,6 +70,7 @@ def _load_dotenv() -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
+        value = value.split(" #", 1)[0]  # срезать инлайн-комментарий (правило ' #', как в python-dotenv)
         os.environ.setdefault(key.strip(), value.strip())
 
 
