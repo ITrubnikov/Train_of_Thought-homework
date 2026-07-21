@@ -1,0 +1,11 @@
+# Пины LlamaIndex — ровно те же, что в ноутбуке модуля 14: API агентов у
+# библиотеки меняется быстро, свободные версии ломают шаблон молча.
+llama-index-core==0.14.23
+# Локальные эмбеддинги на CPU (потянет torch — самый тяжёлый пакет, ставится один раз).
+llama-index-embeddings-huggingface==0.7.0
+# Мозг: OpenAI-совместимый сервер LM Studio через OpenAILike, без ключей.
+llama-index-llms-openai-like==0.7.2
+# SimpleDirectoryReader читает knowledge/*.md именно этим пакетом.
+llama-index-readers-file==0.6.0
+gradio>=5,<6
+requests>=2
