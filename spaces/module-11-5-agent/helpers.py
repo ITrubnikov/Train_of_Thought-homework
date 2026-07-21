@@ -77,14 +77,18 @@ def fact_check(before: dict, after: dict, text: str) -> str:
 
     Считаем дельту склада (stored) до/после — так «в stored уже был wood с
     прошлого раза» не выдаётся за успех этого прогона. `banked` случается
-    только на доме [0, 0]."""
+    только на доме [0, 0]. Та же проверка, что в 13.6/14/14.5."""
     res = resource_for(text)
     x, y = after.get("x"), after.get("y")
     inv = after.get("inventory") or {}
     before_stored = (before.get("stored") or {}).get(res, 0)
     after_stored = (after.get("stored") or {}).get(res, 0)
     delta = after_stored - before_stored
-    need_bank = any(w in text.lower() for w in ("сда", "склад", "storehouse", "deposit", "банк"))
+    # Банк засчитываем и по словам «сдай/склад», и по возврату ДОМОЙ: в этой игре
+    # депозита нет, дом [0, 0] сам разгружает рюкзак, поэтому «вернись домой» —
+    # тоже требование сдать (тот же список триггеров, что в 14/14.5).
+    need_bank = any(w in text.lower() for w in (
+        "сда", "склад", "storehouse", "deposit", "банк", "дом", "home", "0, 0"))
     facts = (
         f"Проверка по факту (get_character): позиция [{x}, {y}], "
         f"рюкзак {dict(inv) or '{}'}, склад {dict(after.get('stored') or {}) or '{}'}."
@@ -93,7 +97,9 @@ def fact_check(before: dict, after: dict, text: str) -> str:
         got = (inv.get(res, 0) or 0) + max(delta, 0)
         return ("✅ " + facts + f" {res} добыт." if got > 0
                 else "ℹ️ " + facts + f" {res} пока не видно — проверьте прогон.")
-    if delta > 0 and [x, y] == [0, 0]:
+    # Успех судим по одной дельте stored: сдача уже случилась, даже если агент
+    # после банка успел отойти от дома (позиция и так напечатана в фактах).
+    if delta > 0:
         return "✅ " + facts + f" Склад пополнился на {delta} {res} — сдано на самом деле."
     if inv.get(res, 0):
         return ("⚠️ " + facts + f" {res} ещё в РЮКЗАКЕ, житель не на доме [0, 0] — "
