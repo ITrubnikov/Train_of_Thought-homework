@@ -20,6 +20,7 @@ get_character. Клиент — тонкая обёртка на requests, чт�
 """
 
 import json
+import time
 from typing import Literal, Optional
 
 import requests
@@ -86,6 +87,28 @@ class CognopolisClient:
         return self._request("GET", "/character", auth=True)
 
 
+
+# ── ожидание такта (D-111 «работа видна») ──────────────────────────────────────
+# Действие ставит жителя В РАБОТУ, и работа эта длится: шаг — около секунды, добыча
+# и бой — около десяти, крафт — десятки секунд (длительность конкретного рецепта движок
+# объявляет в GET /recipes → seconds). Агент-инструментальщик ждать не умеет: тулы «поспи»
+# у него нет, а «повтори тот же вызов» на длинном такте только жжёт шаги — на каждый ранний
+# вызов сервер отвечает character_on_cooldown, и мир не двигается.
+# Поэтому такт досиживает сам инструмент, и ровно столько, сколько сказал сервер: число
+# берётся из поля cooldown ТОГО ЖЕ конверта, ни одной зашитой константы.
+WAIT_CAP_S = 60.0   # предохранитель: странное число с сервера не подвесит Space навсегда
+
+
+def _wait_cooldown(env: dict) -> None:
+    """Дождаться конца такта по полю cooldown конверта действия."""
+    try:
+        pause = float((env or {}).get("cooldown") or 0.0)
+    except (TypeError, ValueError):
+        return
+    if pause > 0:
+        time.sleep(min(pause, WAIT_CAP_S))
+
+
 def build_world_tools(client: CognopolisClient, on_state) -> list:
     """Четыре инструмента-действия над живым миром — голыми функциями.
 
@@ -99,6 +122,7 @@ def build_world_tools(client: CognopolisClient, on_state) -> list:
     def _envelope(env: dict) -> str:
         if isinstance(env, dict) and env.get("character"):
             on_state(env["character"])
+        _wait_cooldown(env)                     # такт досиживаем ЗА агента — см. выше
         return json.dumps(env, ensure_ascii=False)
 
     def _game_error(exc: GameError) -> str:

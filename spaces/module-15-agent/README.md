@@ -67,6 +67,11 @@ gate в Claude Code из модуля 11, только собранный ваш
   `{result, cooldown, character}` и ошибки `{code, message}` из 11.5 — только
   «паспорт» теперь собирает LangChain из сигнатуры и docstring
   (`Literal` → enum), см. пометки в `cognopolis_tools.py`.
+- **Такт действия инструмент досиживает сам.** Шаг ~1 с, добыча и бой ~10 с,
+  крафт — десятки секунд (`GET /stats` → `tact.seconds`, длительность рецепта —
+  `GET /recipes` → `seconds`). `_wait_cooldown` в `cognopolis_tools.py` спит ровно
+  `cooldown` из ответа, поэтому ворота перед `gather` встают на СВОБОДНОГО жителя,
+  а не в середину его работы.
 
 ## Два эксперимента на пять минут
 

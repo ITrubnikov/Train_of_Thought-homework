@@ -10,6 +10,7 @@
 # Токен: скопируйте .env-example в .env и впишите COGNOPOLIS_TOKEN — либо передайте
 # переменной окружения (настоящее окружение важнее .env).
 import os
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -58,19 +59,45 @@ def _request(method: str, path: str, json: dict | None = None, auth: bool = Fals
     return r.json()
 
 
+# ── ожидание такта (D-111 «работа видна») ──────────────────────────────────────
+# Действие ставит жителя В РАБОТУ, и работа эта длится: шаг — около секунды, добыча
+# и бой — около десяти, крафт — десятки секунд (длительность конкретного рецепта движок
+# объявляет в GET /recipes → seconds). Клиент-агент ждать не умеет: тулы «поспи» в этом
+# наборе нет, а «повтори тот же вызов» на длинном такте только жжёт шаги — на каждый ранний
+# вызов сервер отвечает character_on_cooldown, и мир не двигается.
+# Поэтому такт досиживает сама обёртка, ровно столько, сколько сказал сервер: число берётся
+# из поля cooldown ТОГО ЖЕ конверта, ни одной зашитой константы. Чтения (get_character,
+# get_map) через _act не ходят — они такт не тратят и ждать им нечего.
+WAIT_CAP_S = 60.0   # предохранитель: странное число с сервера не подвесит агента навсегда
+
+
+def _act(path: str, json: dict | None = None) -> dict:
+    """Действие + честное ожидание такта по полю cooldown ответа."""
+    env = _request("POST", path, json=json, auth=True)
+    try:
+        pause = float((env or {}).get("cooldown") or 0.0)
+    except (TypeError, ValueError):
+        pause = 0.0
+    if pause > 0:
+        time.sleep(min(pause, WAIT_CAP_S))
+    return env
+
+
 @mcp.tool
 def move(direction: Literal["north", "south", "east", "west"]) -> dict:
     """Шагнуть жителем на одну клетку в сторону direction. Возврат на дом (0, 0)
     сам разгружает рюкзак на склад (авто-банк) — отдельного deposit в живом мире нет.
-    Ответ — конверт {result, cooldown, character}; нарушение правила — {error: {code, message}}."""
-    return _request("POST", f"/actions/move/{direction}", json={}, auth=True)
+    Ответ — конверт {result, cooldown, character}; нарушение правила — {error: {code, message}}.
+    Вернётся, когда житель ДОСИДИТ такт этого шага (см. _act) — отдельно ждать не надо."""
+    return _act(f"/actions/move/{direction}", json={})
 
 
 @mcp.tool
 def gather(resource: Literal["wood", "stone"] | None = None) -> dict:
     """Добыть ресурс с клетки, на которой стоит житель (дерево -> wood, камень -> stone).
-    Без resource берёт то, что есть на клетке; с resource — только ожидаемое."""
-    return _request("POST", "/actions/gather", json={"resource": resource}, auth=True)
+    Без resource берёт то, что есть на клетке; с resource — только ожидаемое.
+    Добыча — длинный такт (сейчас ~10 с); вызов вернётся, когда житель освободится (см. _act)."""
+    return _act("/actions/gather", json={"resource": resource})
 
 
 @mcp.tool
