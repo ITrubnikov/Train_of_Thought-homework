@@ -72,10 +72,21 @@ smolagents-агент (`ToolCallingAgent`) с тем же «хорошим» к�
    ```bash
    cd spaces/module-11-5-agent
    python -m venv .venv
-   source .venv/bin/activate        # Windows: .venv\Scripts\activate
+   source .venv/bin/activate        # bash/zsh; fish — см. ниже; Windows: .venv\Scripts\activate
    pip install -r requirements.txt
    python app.py
    ```
+
+   Если ваша оболочка — **fish**, строка `source .venv/bin/activate` упадёт
+   с ошибкой `Unsupported use of '='`: этот скрипт написан для bash/zsh.
+   Для fish в venv лежит свой скрипт активации:
+
+   ```fish
+   source .venv/bin/activate.fish
+   ```
+
+   Можно и вовсе не активировать venv, а звать его Python напрямую — это
+   работает в любой оболочке: `.venv/bin/python app.py`.
 
 3. Откройте http://127.0.0.1:7860, впишите под-токен своего жителя, попросите
    «Добудь одно дерево (wood) и сдай его на склад».
