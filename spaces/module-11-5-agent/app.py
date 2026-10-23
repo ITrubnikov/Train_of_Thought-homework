@@ -7,8 +7,10 @@
 только живая игра; без под-токена агент вежливо просит его вписать.
 
 Мозг агента — локальная модель из LM Studio через его OpenAI-совместимый
-сервер http://localhost:1234/v1 (OpenAIServerModel), без ключей. Контракт
-tools от модели не зависит — это и есть тезис лекции «tool это контракт».
+сервер http://localhost:1234/v1 (OpenAIServerModel), без ключей. Какую
+именно модель — выбирают в выпадающем списке над чатом (все чат-модели LM
+Studio + «Автовыбор»). Контракт tools от модели не зависит — это и есть
+тезис лекции «tool это контракт».
 
 Главное отличие этой копии: в cognopolis_tools.py лежат ДВА набора
 инструментов с разбором дизайна по чек-листу A→H из лекции. Хороший
@@ -68,46 +70,90 @@ NO_CHARACTER_TOKEN_MESSAGE = (
 )
 
 
-def _detect_lm_model():
-    """Спросить у LM Studio, какая разговорная модель доступна (Шаг 7 ноутбука).
+# Значение выпадающего списка «выбрать модель самому не хочу — реши сам».
+AUTO_MODEL = ""
 
-    Возвращает id модели или None, если сервер молчит. Переопределить выбор
-    можно переменной окружения LM_MODEL_ID.
 
-    Гоча автодетекта: /v1/models при включённом JIT loading отдаёт все
-    СКАЧАННЫЕ модели, а не загруженную в память — первым может оказаться
-    что угодно. Поэтому сперва спрашиваем расширенный /api/v0/models и берём
-    модель со state=loaded (текстовые llm приоритетнее мультимодальных vlm),
-    и только для старых LM Studio без /api/v0 падаем на грубую эвристику."""
-    forced = os.getenv("LM_MODEL_ID")
-    if forced:
-        return forced
+def _lm_models():
+    """Список разговорных моделей LM Studio: [(id, state, type), ...].
+
+    Пустой список = сервер молчит (не запущен Start server). Спрашиваем
+    расширенный /api/v0/models — он различает state (loaded/not-loaded) и type
+    (llm / vlm / embeddings); берём только разговорные (llm, vlm), эмбеддеры
+    выкидываем. На старом LM Studio без /api/v0 падаем на /v1/models, где ни
+    state, ни типа нет (тогда state=type=None, и в UI просто нет пометок).
+
+    Гоча: /v1/models при включённом JIT loading отдаёт ВСЕ скачанные модели, а
+    не загруженную в память — поэтому для «какая сейчас в памяти» нужен именно
+    /api/v0/models со state=loaded (см. _pick_default)."""
     root = LM_BASE.rsplit("/v1", 1)[0]
     try:
         r = requests.get(f"{root}/api/v0/models", timeout=2)
         r.raise_for_status()
-        models = r.json().get("data", [])
-        for want_type in ("llm", "vlm"):
-            loaded = [m["id"] for m in models
-                      if m.get("state") == "loaded" and m.get("type") == want_type]
-            if loaded:
-                return loaded[0]
+        return [(m["id"], m.get("state"), m.get("type"))
+                for m in r.json().get("data", [])
+                if m.get("type") in ("llm", "vlm")]
     except Exception:  # noqa: BLE001 — старый LM Studio без /api/v0, идём дальше
         pass
     try:
         r = requests.get(f"{LM_BASE}/models", timeout=2)
         r.raise_for_status()
-        ids = [item["id"] for item in r.json().get("data", [])]
-        chat_ids = [i for i in ids if "embed" not in i.lower()]
-        return chat_ids[0] if chat_ids else None
+        return [(item["id"], None, None) for item in r.json().get("data", [])
+                if "embed" not in item["id"].lower()]
     except Exception:  # noqa: BLE001 — любой сбой значит «сервера нет»
-        return None
+        return []
 
 
-def _make_model():
+def _pick_default(models):
+    """Автовыбор модели из списка _lm_models: приоритет — загруженная llm.
+
+    Переопределяется переменной окружения LM_MODEL_ID. Дальше: загруженная в
+    память llm > загруженная vlm > первая доступная (её LM Studio подгрузит на
+    лету, JIT). None — если список пуст (сервер молчит)."""
+    forced = os.getenv("LM_MODEL_ID")
+    if forced:
+        return forced
+    for want_type in ("llm", "vlm"):
+        for mid, state, mtype in models:
+            if state == "loaded" and mtype == want_type:
+                return mid
+    return models[0][0] if models else None
+
+
+def _resolve_model(model_choice, models):
+    """Какую модель реально отдать агенту по выбору из выпадающего списка.
+
+    Пусто/AUTO или устаревший id (модель уже удалили/выгрузили из каталога) →
+    автовыбор. Иначе — ровно то, что выбрал пользователь (LM Studio подгрузит
+    её на лету, если она ещё не в памяти)."""
+    chosen = (model_choice or "").strip()
+    available = {mid for mid, _, _ in models}
+    return chosen if chosen in available else _pick_default(models)
+
+
+def model_choices(selected=None):
+    """Пункты выпадающего списка моделей: Автовыбор + все чат-модели LM Studio.
+
+    Метка показывает состояние: ● загружена в память, ○ скачана но не загружена
+    (LM Studio подгрузит её на лету при первом сообщении), плюс тип (llm/vlm).
+    Значение пункта — id модели (или AUTO для автовыбора). Возвращает gr.update,
+    чтобы обновлять список и при загрузке страницы, и по кнопке «Обновить»;
+    текущий выбор сохраняем, если он ещё доступен."""
+    models = _lm_models()
+    choices = [("Автовыбор (загруженная, иначе первая доступная)", AUTO_MODEL)]
+    for mid, state, mtype in models:
+        mark = "● " if state == "loaded" else ("○ " if state == "not-loaded" else "")
+        suffix = f"  · {mtype}" if mtype else ""
+        choices.append((f"{mark}{mid}{suffix}", mid))
+    values = {v for _, v in choices}
+    keep = selected if selected in values else AUTO_MODEL
+    return gr.update(choices=choices, value=keep)
+
+
+def _make_model(model_id):
     """Модель-мозг из LM Studio (одна строка лекции «какой модели отдать tools»)."""
     return OpenAIServerModel(
-        model_id=_detect_lm_model(),
+        model_id=model_id,
         api_base=LM_BASE,
         api_key="lm-studio",  # LM Studio ключ не проверяет, но клиенту нужна заглушка
         max_tokens=2096,
@@ -168,14 +214,14 @@ def _set_cogno_snapshot(character: dict):
 # На сильной модели helpers можно не использовать.
 
 
-def _ensure_agent(cogno_token: str, base_url: str):
-    """Собрать (или переиспользовать) агента под текущие токен+адрес+модель.
+def _ensure_agent(cogno_token: str, base_url: str, model_id: str):
+    """Собрать (или переиспользовать) агента под токен + адрес + выбранную модель.
 
-    Ключ включает id модели LM Studio: если в LM Studio загрузили другую
-    модель, ключ меняется и агент пересобирается — без ручной сверки."""
+    Ключ включает id модели LM Studio: выбрали в выпадающем списке другой мозг
+    (или «Автовыбор» подхватил другую загруженную модель) — ключ сменился, и
+    агент пересобирается при следующем сообщении, без рестарта приложения."""
     global _agent, _agent_key
-    model_hint = _detect_lm_model()
-    key = (cogno_token, base_url, model_hint)
+    key = (cogno_token, base_url, model_id)
     if _agent is not None and _agent_key == key:
         return _agent
     client = cognopolis_tools.CognopolisClient(base_url, cogno_token)
@@ -185,7 +231,7 @@ def _ensure_agent(cogno_token: str, base_url: str):
     # max_steps с запасом: на реальной игре маршрут длиннее и кулдаун съедает
     # шаги на повторы — это часть цикла, а не сбой.
     _agent = ToolCallingAgent(
-        tools=tools, model=_make_model(), max_steps=40, instructions=INSTRUCTIONS
+        tools=tools, model=_make_model(model_id), max_steps=40, instructions=INSTRUCTIONS
     )
     _agent_key = key
     return _agent
@@ -215,7 +261,7 @@ def store_message(message):
     return message, ""
 
 
-def respond(message, history, cogno_token):
+def respond(message, history, cogno_token, model_choice=AUTO_MODEL):
     """Обработать сообщение: проверить токен/LM Studio, запустить агента на игре."""
     text = (message or "").strip()
     cogno_token = (cogno_token or "").strip()
@@ -230,10 +276,15 @@ def respond(message, history, cogno_token):
     yield history, world_state_text()
 
     # Мозг агента: без LM Studio не падаем, а объясняем, чего не хватает.
-    if _detect_lm_model() is None:
+    # Пустой список моделей = сервер не отвечает (не нажат Start server).
+    models = _lm_models()
+    if not models:
         history.append(gr.ChatMessage(role="assistant", content=NO_LMSTUDIO_MESSAGE))
         yield history, world_state_text()
         return
+    # Какую модель отдать агенту: выбор из выпадающего списка (или автовыбор
+    # загруженной, если выбран «Автовыбор» или модель из списка исчезла).
+    model_id = _resolve_model(model_choice, models)
 
     # Игра только онлайн: без под-токена не работаем и не подменяем мок-лесом.
     if not cogno_token:
@@ -266,8 +317,10 @@ def respond(message, history, cogno_token):
 
     # Живой агентный цикл think -> act -> observe; шаги стримятся в чат.
     try:
-        fresh = _agent is None or _agent_key is None
-        agent = _ensure_agent(cogno_token, base_url)
+        # Сообщение «Подключено…» показываем и при первом прогоне, и когда
+        # сменили модель в списке: в чате видно, какой мозг сейчас ведёт жителя.
+        fresh = _agent is None or _agent_key != (cogno_token, base_url, model_id)
+        agent = _ensure_agent(cogno_token, base_url, model_id)
         if fresh:
             model_name = getattr(agent.model, "model_id", "?")
             who = char.get("name") or char.get("id", "?")
@@ -330,13 +383,26 @@ with gr.Blocks(title="Лесоруб — агент на живой игре Cog
         "например: «Добудь одно дерево (wood) и сдай его на склад» — в чате "
         "видно вызовы tools, конверт {result, cooldown, character} и обучающие "
         "ошибки {code, message}.\n\n"
-        f"*Модель (мозг): локальный LM Studio ({LM_BASE}), подхватывается сама.*"
+        f"*Модель (мозг): локальный LM Studio ({LM_BASE}). Выберите её в "
+        "списке ниже — «Автовыбор» берёт загруженную в память, а если "
+        "ничего не загружено — первую скачанную (LM Studio подтянет её).*"
     )
     token_input = gr.Textbox(
         type="password",
         label="Под-токен персонажа Cognopolis (обязательно)",
         placeholder="Character.token вашего жителя",
     )
+    with gr.Row():
+        model_dropdown = gr.Dropdown(
+            # choices/value наполняются на загрузке страницы через demo.load
+            # (сервер LM Studio может быть ещё не запущен в момент импорта).
+            choices=[("Автовыбор (загруженная, иначе первая доступная)", AUTO_MODEL)],
+            value=AUTO_MODEL,
+            label="Модель-мозг (LM Studio)",
+            info="● загружена в память · ○ подгрузится на лету при первом сообщении",
+            scale=5,
+        )
+        refresh_btn = gr.Button("↻ Обновить", scale=1)
     with gr.Row():
         with gr.Column(scale=3):
             chatbot = gr.Chatbot(label="Лесоруб", type="messages", scale=1)
@@ -359,13 +425,18 @@ with gr.Blocks(title="Лесоруб — агент на живой игре Cog
             reset_btn = gr.Button("Сбросить")
 
     stored_message = gr.State("")
+    respond_inputs = [stored_message, chatbot, token_input, model_dropdown]
     text_input.submit(
         store_message, [text_input], [stored_message, text_input]
-    ).then(respond, [stored_message, chatbot, token_input], [chatbot, state_box])
+    ).then(respond, respond_inputs, [chatbot, state_box])
     send_btn.click(
         store_message, [text_input], [stored_message, text_input]
-    ).then(respond, [stored_message, chatbot, token_input], [chatbot, state_box])
+    ).then(respond, respond_inputs, [chatbot, state_box])
     reset_btn.click(reset_click, None, [chatbot, state_box])
+    # Список моделей — живой: наполняем на загрузке страницы и по кнопке
+    # «Обновить» (запустили Start server / загрузили другую модель — видно сразу).
+    refresh_btn.click(model_choices, model_dropdown, model_dropdown)
+    demo.load(model_choices, model_dropdown, model_dropdown)
 
 
 if __name__ == "__main__":
